@@ -2,16 +2,15 @@
 -- Checkpoint 1
 
 -- 1. A query combining WHERE, ORDER BY, and LIMIT.
--- This query retrieves the top 3 most expensive products that are currently in stock (stock > 0),
--- ordered by price descending.
+-- Retrieves top 3 most expensive in-stock products with optional category check (LEFT JOIN) by price decending.
 SELECT 
     p.name AS product_name, 
-    c.name AS category_name, 
+    COALESCE(c.name, 'Uncategorized') AS category_name, 
     p.price, 
     p.stock
 FROM 
     products p
-JOIN 
+LEFT JOIN 
     categories c ON p.category_id = c.id
 WHERE 
     p.stock > 0
@@ -26,12 +25,12 @@ SELECT
     o.total_amount,
     o.status,
     o.created_at,
-    SUM(oi.quantity) as total_items
+    COALESCE(SUM(oi.quantity), 0) AS total_items
 FROM 
     orders o
 JOIN 
     users u ON o.user_id = u.id
-JOIN 
+LEFT JOIN 
     order_items oi ON o.id = oi.order_id
 WHERE 
     u.username = 'john_doe'

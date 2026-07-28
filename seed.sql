@@ -1,6 +1,9 @@
 -- RevoShop API - Sample Data
 -- Checkpoint 1
 
+-- 0. Reset Tables (Idempotent execution)
+TRUNCATE TABLE order_items, orders, products, categories, users RESTART IDENTITY CASCADE;
+
 -- 1. Insert Categories
 INSERT INTO categories (name, description) VALUES
 ('Electronics', 'Gadgets, devices, and accessories'),
@@ -27,10 +30,11 @@ INSERT INTO products (category_id, name, description, price, stock) VALUES
 
 -- 4. Insert Orders
 -- Assuming john_doe (id 1) and jane_smith (id 2) make orders
+-- Note: status 'completed' diganti menjadi 'delivered' agar sesuai dengan CHECK constraint
 INSERT INTO orders (user_id, total_amount, status) VALUES
-(1, 1149.49, 'completed'),
+(1, 1149.49, 'delivered'),
 (2, 59.90, 'pending'),
-(1, 45.00, 'processing');
+(1, 44.99, 'processing');
 
 -- 5. Insert Order Items
 -- Order 1: Smartphone X (1 x 999.99) + Wireless Earbuds (1 x 149.50) = 1149.49
@@ -42,10 +46,7 @@ INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALU
 INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALUES
 (2, 5, 1, 59.90);
 
--- Order 3: Classic T-Shirt (1 x 19.99) + Desk Lamp (1 x 25.00) = 44.99 (rounded in total to 45.00 for example purpose, wait let's fix it so it perfectly matches)
--- Let's say order 3 total amount was 44.99 instead, let's update it.
-UPDATE orders SET total_amount = 44.99 WHERE id = 3;
-
+-- Order 3: Classic T-Shirt (1 x 19.99) + Desk Lamp (1 x 25.00) = 44.99
 INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALUES
 (3, 4, 1, 19.99),
 (3, 6, 1, 25.00);
