@@ -30,7 +30,7 @@ INSERT INTO products (category_id, name, description, price, stock) VALUES
 
 -- 4. Insert Orders
 -- Assuming john_doe (id 1) and jane_smith (id 2) make orders
--- Note: status 'completed' diganti menjadi 'delivered' agar sesuai dengan CHECK constraint
+-- Note: status 'completed' replaced with 'delivered' to match the CHECK constraint
 INSERT INTO orders (user_id, total_amount, status) VALUES
 (1, 1149.49, 'delivered'),
 (2, 59.90, 'pending'),
