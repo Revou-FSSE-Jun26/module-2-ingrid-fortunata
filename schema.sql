@@ -27,7 +27,8 @@ CREATE TABLE products (
     description TEXT,
     price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 4. Orders Table
@@ -37,7 +38,8 @@ CREATE TABLE orders (
     total_amount NUMERIC(10, 2) NOT NULL CHECK (total_amount >= 0),
     -- want to constraints: pending, processing, shipped, delivered, cancelled
     status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 5. Order Items Table (Junction Table for Orders <-> Products)
