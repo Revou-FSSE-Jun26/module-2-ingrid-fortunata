@@ -33,6 +33,8 @@ The database consists of 5 tables:
 - `orders`: Orders placed by a user.
 - `order_items`: A junction table linking `orders` and `products` (many-to-many relationship).
 
+For detailed documentation on database design decisions and foreign key constraint rules (such as why `ON DELETE RESTRICT` is used), please refer to [SCHEMA_DOCUMENTATION.md](file:///Users/ingrid.fortunata/Desktop/Learning/Revou/module-2-ingrid-fortunata/SCHEMA_DOCUMENTATION.md).
+
 #### Database Schema Diagram
 
 ![Database Schema Diagram](./img/diagram.png)
