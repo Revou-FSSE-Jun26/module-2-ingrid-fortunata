@@ -1,6 +1,3 @@
--- RevoShop API - Sample Queries
--- Checkpoint 1
-
 -- 1. A query combining WHERE, ORDER BY, and LIMIT.
 -- Retrieves top 3 most expensive in-stock products with optional category check (LEFT JOIN) by price decending.
 SELECT 
@@ -33,7 +30,7 @@ JOIN
 LEFT JOIN 
     order_items oi ON o.id = oi.order_id
 WHERE 
-    u.username = 'john_doe'
+    u.username = 'sarah_mill'
 GROUP BY 
     o.id, u.username, o.total_amount, o.status, o.created_at
 ORDER BY 

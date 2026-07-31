@@ -34,7 +34,7 @@ CREATE TABLE products (
 -- 4. Orders Table
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     total_amount NUMERIC(10, 2) NOT NULL CHECK (total_amount >= 0),
     -- want to constraints: pending, processing, shipped, delivered, cancelled
     status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
@@ -44,7 +44,7 @@ CREATE TABLE orders (
 
 -- 5. Order Items Table (Junction Table for Orders <-> Products)
 CREATE TABLE order_items (
-    order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+    order_id INTEGER REFERENCES orders(id) ON DELETE RESTRICT,
     product_id INTEGER REFERENCES products(id) ON DELETE RESTRICT,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     price_at_purchase NUMERIC(10, 2) NOT NULL CHECK (price_at_purchase >= 0),

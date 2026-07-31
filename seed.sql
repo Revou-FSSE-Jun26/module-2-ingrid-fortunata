@@ -1,6 +1,3 @@
--- RevoShop API - Sample Data
--- Checkpoint 1
-
 -- 0. Reset Tables (Idempotent execution)
 TRUNCATE TABLE order_items, orders, products, categories, users RESTART IDENTITY CASCADE;
 
@@ -11,11 +8,9 @@ INSERT INTO categories (name, description) VALUES
 ('Home & Garden', 'Furniture, decor, and gardening tools');
 
 -- 2. Insert Users
--- Note: Passwords are raw strings here for simplicity in DB testing, 
--- but in the actual application, they will be hashed (e.g., pbkdf2:sha256).
 INSERT INTO users (username, email, password_hash) VALUES
-('john_doe', 'john@example.com', 'hashed_password_1'),
-('jane_smith', 'jane@example.com', 'hashed_password_2'),
+('sarah_mill', 'sarah@example.com', 'hashed_password_1'),
+('peter_parker', 'peter@example.com', 'hashed_password_2'),
 ('bob_builder', 'bob@example.com', 'hashed_password_3');
 
 -- 3. Insert Products
@@ -29,8 +24,6 @@ INSERT INTO products (category_id, name, description, price, stock) VALUES
 (3, 'Ergonomic Chair', 'Comfortable chair for long working hours', 199.99, 30);
 
 -- 4. Insert Orders
--- Assuming john_doe (id 1) and jane_smith (id 2) make orders
--- Note: status 'completed' replaced with 'delivered' to match the CHECK constraint
 INSERT INTO orders (user_id, total_amount, status) VALUES
 (1, 1149.49, 'delivered'),
 (2, 59.90, 'pending'),
