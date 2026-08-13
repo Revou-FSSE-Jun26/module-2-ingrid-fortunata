@@ -13,13 +13,18 @@ def seed_database():
         # 1. Ensure Categories
         cat_electronics = Category.query.filter_by(name='Electronics').first()
         if not cat_electronics:
-            cat_electronics = Category(name='Electronics', description='Gadgets and tech devices')
+            cat_electronics = Category(name='Electronics', description='Gadgets and tech devices', is_active=True)
             db.session.add(cat_electronics)
 
         cat_apparel = Category.query.filter_by(name='Apparel').first()
         if not cat_apparel:
-            cat_apparel = Category(name='Apparel', description='Clothing and fashion items')
+            cat_apparel = Category(name='Apparel', description='Clothing and fashion items', is_active=True)
             db.session.add(cat_apparel)
+
+        cat_inactive = Category.query.filter_by(name='Inactive Category').first()
+        if not cat_inactive:
+            cat_inactive = Category(name='Inactive Category', description='Deactivated category', is_active=False)
+            db.session.add(cat_inactive)
 
         db.session.commit()
 
@@ -31,7 +36,8 @@ def seed_database():
                 name='Wireless Noise-Canceling Headphones',
                 description='High-fidelity Bluetooth headphones',
                 price=199.99,
-                stock=45
+                stock=45,
+                is_active=True
             )
             db.session.add(p1)
 
@@ -42,7 +48,8 @@ def seed_database():
                 name='Ergonomic Mechanical Keyboard',
                 description='Custom RGB mechanical keyboard',
                 price=129.50,
-                stock=30
+                stock=30,
+                is_active=True
             )
             db.session.add(p2)
 
@@ -53,9 +60,34 @@ def seed_database():
                 name='Organic Cotton Hoodie',
                 description='Premium organic cotton pullover hoodie',
                 price=59.99,
-                stock=100
+                stock=100,
+                is_active=True
             )
             db.session.add(p3)
+
+        p_inactive = Product.query.filter_by(name='Deactivated Phone').first()
+        if not p_inactive:
+            p_inactive = Product(
+                category_id=cat_electronics.id,
+                name='Deactivated Phone',
+                description='Old deactivated smartphone model',
+                price=499.99,
+                stock=5,
+                is_active=False
+            )
+            db.session.add(p_inactive)
+
+        p_in_inactive_cat = Product.query.filter_by(name='Product in Inactive Category').first()
+        if not p_in_inactive_cat:
+            p_in_inactive_cat = Product(
+                category_id=cat_inactive.id,
+                name='Product in Inactive Category',
+                description='Product whose category is deactivated',
+                price=10.00,
+                stock=10,
+                is_active=True
+            )
+            db.session.add(p_in_inactive_cat)
 
         db.session.commit()
 
@@ -66,10 +98,23 @@ def seed_database():
                 username='alice_smith',
                 email='alice@example.com',
                 password_hash='pbkdf2:sha256:hash_sample_alice',
-                role='customer'
+                role='customer',
+                is_active=True
             )
             db.session.add(alice)
-            db.session.commit()
+
+        deactivated_user = User.query.filter_by(username='deactivated_user').first()
+        if not deactivated_user:
+            deactivated_user = User(
+                username='deactivated_user',
+                email='deactivated@example.com',
+                password_hash='password_deactivated',
+                role='customer',
+                is_active=False
+            )
+            db.session.add(deactivated_user)
+
+        db.session.commit()
 
         # 4. Ensure Order linked to multiple products (Many-to-Many via order_items)
         existing_order = Order.query.filter_by(user_id=alice.id).first()

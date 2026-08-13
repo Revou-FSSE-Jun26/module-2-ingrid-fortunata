@@ -10,6 +10,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), nullable=False, default='user')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    is_active = db.Column(db.Boolean, default=True, server_default='true', nullable=False)
 
 
     # Relationship to Order
@@ -21,6 +22,7 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'role': self.role,
+            'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
