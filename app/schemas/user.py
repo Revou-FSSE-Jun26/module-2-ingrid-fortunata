@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, ValidationError, validates_schema
+from marshmallow import Schema, fields, ValidationError, validates_schema, validate
 
 class UserSchema(Schema):
     id = fields.Int(dump_only=True)
@@ -13,7 +13,7 @@ class UserRegisterInputSchema(Schema):
     email = fields.Email(required=True)
     password = fields.Str(load_only=True)
     password_hash = fields.Str(load_only=True)
-    role = fields.Str(load_default="user")
+    role = fields.Str(load_default="customer", validate=validate.OneOf(["superadmin", "admin", "seller", "customer"]))
 
     @validates_schema
     def validate_password_presence(self, data, **kwargs):

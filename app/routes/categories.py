@@ -2,6 +2,7 @@ from flask_smorest import Blueprint
 from flask import jsonify
 from app.extensions import db
 from app.models.category import Category
+from app.auth import roles_required
 from app.schemas import (
     CategoryCreateInputSchema,
     CategoryUpdateInputSchema,
@@ -13,6 +14,7 @@ from app.schemas import (
 categories_bp = Blueprint('categories', __name__, description='Operations on categories')
 
 @categories_bp.route('/categories', methods=['POST'])
+@roles_required('superadmin', 'admin', 'seller')
 @categories_bp.arguments(CategoryCreateInputSchema, location='json')
 @categories_bp.response(201, CategoryGetResponseSchema)
 def create_category(category_data):
@@ -59,6 +61,7 @@ def get_category_by_id(id):
     }), 200
 
 @categories_bp.route('/categories/<int:id>', methods=['PUT'])
+@roles_required('superadmin', 'admin', 'seller')
 @categories_bp.arguments(CategoryUpdateInputSchema, location='json')
 @categories_bp.response(200, CategoryGetResponseSchema)
 def update_category(category_data, id):
@@ -87,6 +90,7 @@ def update_category(category_data, id):
     }), 200
 
 @categories_bp.route('/categories/<int:id>', methods=['DELETE'])
+@roles_required('superadmin', 'admin', 'seller')
 def delete_category(id):
     """Delete a category."""
     category = db.session.get(Category, id)
