@@ -1,6 +1,6 @@
 from flask import Flask
 from app.config import Config
-from app.extensions import db, migrate
+from app.extensions import db, migrate, api
 
 def create_app(config_class=Config):
     flask_app = Flask(__name__)
@@ -9,6 +9,7 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(flask_app)
     migrate.init_app(flask_app, db)
+    api.init_app(flask_app)
 
     # Import models to ensure they are registered with SQLAlchemy/Migrate
     import app.models
@@ -17,8 +18,9 @@ def create_app(config_class=Config):
     from app.routes.products import products_bp
     from app.routes.users import users_bp
 
-    flask_app.register_blueprint(products_bp)
-    flask_app.register_blueprint(users_bp)
+    api.register_blueprint(products_bp)
+    api.register_blueprint(users_bp)
+
 
     @flask_app.route('/')
     def index():

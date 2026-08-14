@@ -1,13 +1,17 @@
-from flask import Blueprint, request, jsonify
+from flask_smorest import Blueprint
+from flask import request, jsonify
 from app.extensions import db
 from app.models.user import User
+from app.schemas import UserRegisterInputSchema, UserRegisterResponseSchema, UserLoginInputSchema, UserLoginResponseSchema, UserGetResponseSchema
 
-users_bp = Blueprint('users', __name__)
+users_bp = Blueprint('users', __name__, description='Operations on users')
 
 @users_bp.route('/users', methods=['POST'])
-def register_user():
+@users_bp.arguments(UserRegisterInputSchema, location='json')
+@users_bp.response(201, UserRegisterResponseSchema)
+def register_user(user_data):
     """Register a new user in the database using db.session.add() and db.session.commit()."""
-    data = request.get_json() or {}
+    data = user_data
     
     # Simple validation
     username = data.get('username')
@@ -58,6 +62,7 @@ def register_user():
     }), 201
 
 @users_bp.route('/users/<int:id>', methods=['GET'])
+@users_bp.response(200, UserGetResponseSchema)
 def get_user_by_id(id):
     """Fetches and returns a user by ID, handling the 404 case where user is not found."""
     user = db.session.get(User, id)
@@ -74,11 +79,13 @@ def get_user_by_id(id):
     }), 200
 
 @users_bp.route('/users/login', methods=['POST'])
-def login_user():
+@users_bp.arguments(UserLoginInputSchema, location='json')
+@users_bp.response(200, UserLoginResponseSchema)
+def login_user(login_data):
     """Authenticates a user via username or email and password, validating active status."""
     from werkzeug.security import check_password_hash
     
-    data = request.get_json() or {}
+    data = login_data
     identity = data.get('username') or data.get('email')
     password = data.get('password')
 

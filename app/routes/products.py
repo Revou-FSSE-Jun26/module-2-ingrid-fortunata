@@ -1,10 +1,13 @@
-from flask import Blueprint, jsonify
+from flask_smorest import Blueprint
+from flask import jsonify
 from app.models.product import Product
 from app.models.category import Category
+from app.schemas import ProductListResponseSchema, ProductGetResponseSchema
 
-products_bp = Blueprint('products', __name__)
+products_bp = Blueprint('products', __name__, description='Operations on products')
 
 @products_bp.route('/products', methods=['GET'])
+@products_bp.response(200, ProductListResponseSchema)
 def get_all_products():
     """Returns the list of active products whose category is also active (or uncategorized) from the database."""
     products = Product.query.join(
@@ -21,6 +24,7 @@ def get_all_products():
     }), 200
 
 @products_bp.route('/products/<int:id>', methods=['GET'])
+@products_bp.response(200, ProductGetResponseSchema)
 def get_product_by_id(id):
     """Retrieves a single active product by ID from the database, or returns 404 if not found or inactive."""
     product = Product.query.join(
