@@ -1,8 +1,10 @@
 from flask_smorest import Blueprint
-from flask import request, jsonify
+from flask import jsonify
 from app.extensions import db
 from app.models.user import User
-from app.schemas import UserRegisterInputSchema, UserRegisterResponseSchema, UserLoginInputSchema, UserLoginResponseSchema, UserGetResponseSchema
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_jwt_extended import create_access_token
+from app.schemas import UserRegisterInputSchema, UserRegisterResponseSchema, UserLoginInputSchema, UserGetResponseSchema, AuthLoginResponseSchema
 
 users_bp = Blueprint('users', __name__, description='Operations on users')
 
@@ -10,23 +12,27 @@ users_bp = Blueprint('users', __name__, description='Operations on users')
 @users_bp.arguments(UserRegisterInputSchema, location='json')
 @users_bp.response(201, UserRegisterResponseSchema)
 def register_user(user_data):
-    """Register a new user in the database using db.session.add() and db.session.commit()."""
+    """Register a new user with password hashing."""
     data = user_data
     
-    # Simple validation
     username = data.get('username')
     email = data.get('email')
-    password_hash = data.get('password_hash') or data.get('password')
+    raw_password = data.get('password') or data.get('password_hash')
     role = data.get('role', 'user')
 
-    if not username or not email or not password_hash:
+    if not username or not email or not raw_password:
         return jsonify({
             'success': False,
             'error': 'Validation Error',
             'message': 'username, email, and password (or password_hash) are required.'
         }), 400
 
-    # Check for existing user
+    # Hash password if not already hashed
+    if raw_password and not raw_password.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
+        password_hash = generate_password_hash(raw_password)
+    else:
+        password_hash = raw_password
+
     if User.query.filter_by(username=username).first():
         return jsonify({
             'success': False,
@@ -41,14 +47,12 @@ def register_user(user_data):
             'message': 'Email already exists.'
         }), 400
 
-    # Create new User instance
     new_user = User(
         username=username,
         email=email,
         password_hash=password_hash
     )
     
-    # Assign role if column exists on model
     if hasattr(User, 'role'):
         setattr(new_user, 'role', role)
 
@@ -64,7 +68,7 @@ def register_user(user_data):
 @users_bp.route('/users/<int:id>', methods=['GET'])
 @users_bp.response(200, UserGetResponseSchema)
 def get_user_by_id(id):
-    """Fetches and returns a user by ID, handling the 404 case where user is not found."""
+    """Fetches and returns a user by ID, handling 404."""
     user = db.session.get(User, id)
     if not user:
         return jsonify({
@@ -78,16 +82,13 @@ def get_user_by_id(id):
         'data': user.to_dict()
     }), 200
 
-@users_bp.route('/users/login', methods=['POST'])
+@users_bp.route('/auth/login', methods=['POST'])
 @users_bp.arguments(UserLoginInputSchema, location='json')
-@users_bp.response(200, UserLoginResponseSchema)
-def login_user(login_data):
-    """Authenticates a user via username or email and password, validating active status."""
-    from werkzeug.security import check_password_hash
-    
-    data = login_data
-    identity = data.get('username') or data.get('email')
-    password = data.get('password')
+@users_bp.response(200, AuthLoginResponseSchema)
+def login_auth(login_data):
+    """Login endpoint returning JWT token expiring in 1 day."""
+    identity = login_data.get('username') or login_data.get('email')
+    password = login_data.get('password')
 
     if not identity or not password:
         return jsonify({
@@ -96,7 +97,6 @@ def login_user(login_data):
             'message': 'username/email and password are required.'
         }), 400
 
-    # Query user by username or email
     user = User.query.filter((User.username == identity) | (User.email == identity)).first()
 
     if not user:
@@ -106,7 +106,6 @@ def login_user(login_data):
             'message': 'Invalid username/email or password.'
         }), 401
 
-    # Verify password (supporting hashed check and plaintext check)
     is_password_correct = False
     if user.password_hash.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
         try:
@@ -114,7 +113,6 @@ def login_user(login_data):
         except ValueError:
             is_password_correct = False
         
-        # Fallback for mock seeds like pbkdf2:sha256:hash_sample_alice
         if not is_password_correct:
             parts = user.password_hash.split(':')
             if len(parts) > 1 and parts[-1] == password:
@@ -129,7 +127,6 @@ def login_user(login_data):
             'message': 'Invalid username/email or password.'
         }), 401
 
-    # Check if user is active
     if not user.is_active:
         return jsonify({
             'success': False,
@@ -137,9 +134,13 @@ def login_user(login_data):
             'message': 'Account is deactivated.'
         }), 403
 
+    token = create_access_token(identity=str(user.id))
     return jsonify({
         'success': True,
         'message': 'Login successful',
-        'data': user.to_dict()
+        'data': {
+            'token': token,
+            'user': user.to_dict()
+        }
     }), 200
 

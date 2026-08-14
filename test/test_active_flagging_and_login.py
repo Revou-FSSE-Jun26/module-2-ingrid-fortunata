@@ -58,10 +58,10 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_03_login_validation_errors(self):
-        """POST /users/login should return 400 when identity or password is missing."""
+        """POST /auth/login should return 400 when identity or password is missing."""
         # Missing password
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps({"username": "alice_smith"}),
             content_type='application/json'
         )
@@ -70,7 +70,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
 
         # Missing identity
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps({"password": "password"}),
             content_type='application/json'
         )
@@ -78,40 +78,42 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertFalse(response.get_json()['success'])
 
     def test_04_login_success_username(self):
-        """POST /users/login succeeds using username (hashed password check)."""
+        """POST /auth/login succeeds using username (hashed password check)."""
         payload = {
             "username": "alice_smith",
             "password": "hash_sample_alice"
         }
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps(payload),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['data']['username'], "alice_smith")
-        self.assertTrue(data['data']['is_active'])
+        self.assertIn('token', data['data'])
+        self.assertEqual(data['data']['user']['username'], "alice_smith")
+        self.assertTrue(data['data']['user']['is_active'])
 
     def test_05_login_success_email(self):
-        """POST /users/login succeeds using email (hashed password check)."""
+        """POST /auth/login succeeds using email (hashed password check)."""
         payload = {
             "email": "alice@example.com",
             "password": "hash_sample_alice"
         }
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps(payload),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['data']['username'], "alice_smith")
+        self.assertIn('token', data['data'])
+        self.assertEqual(data['data']['user']['username'], "alice_smith")
 
     def test_06_login_success_plaintext_fallback(self):
-        """POST /users/login succeeds with plaintext password fallback if hash check is skipped."""
+        """POST /auth/login succeeds with plaintext password fallback if hash check is skipped."""
         # Create a temp user with plaintext password
         plaintext_user = User(
             username="plain_user",
@@ -127,28 +129,29 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             "password": "plain_secret_pwd"
         }
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps(payload),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['data']['username'], "plain_user")
+        self.assertIn('token', data['data'])
+        self.assertEqual(data['data']['user']['username'], "plain_user")
 
         # Cleanup
         db.session.delete(plaintext_user)
         db.session.commit()
 
     def test_07_login_failed_invalid_credentials(self):
-        """POST /users/login fails with 401 on wrong username/password."""
+        """POST /auth/login fails with 401 on wrong username/password."""
         # Wrong password
         payload = {
             "username": "alice_smith",
             "password": "wrong_password"
         }
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps(payload),
             content_type='application/json'
         )
@@ -161,7 +164,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             "password": "any_password"
         }
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps(payload),
             content_type='application/json'
         )
@@ -169,13 +172,13 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertFalse(response.get_json()['success'])
 
     def test_08_login_failed_deactivated_user(self):
-        """POST /users/login fails with 403 Forbidden for deactivated users."""
+        """POST /auth/login fails with 403 Forbidden for deactivated users."""
         payload = {
             "username": "deactivated_user",
             "password": "password_deactivated"
         }
         response = self.client.post(
-            '/users/login',
+            '/auth/login',
             data=json.dumps(payload),
             content_type='application/json'
         )
