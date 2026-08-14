@@ -254,6 +254,54 @@ class NewEndpointsTestCase(unittest.TestCase):
         res = self.client.post('/products', json=payload, headers=headers)
         self.assertEqual(res.status_code, 403)
 
+    def test_role_based_order_visibility_and_deletion(self):
+        # 1. Admin logs in
+        admin_headers = self._get_admin_headers()
+        # 2. Customer logs in
+        customer_headers = self._get_customer_headers()
+
+        # 3. Customer places an order
+        order_payload = {"items": [{"product_id": 3, "quantity": 1}]}
+        res = self.client.post('/orders', json=order_payload, headers=customer_headers)
+        self.assertEqual(res.status_code, 201)
+        order_id = res.get_json()['data']['id']
+
+        # 4. Admin lists all orders — should be able to see the customer's order
+        res_list = self.client.get('/orders', headers=admin_headers)
+        self.assertEqual(res_list.status_code, 200)
+        order_ids = [o['id'] for o in res_list.get_json()['data']]
+        self.assertIn(order_id, order_ids)
+
+        # 5. Admin retrieves the specific order details — should be allowed
+        res_detail = self.client.get(f'/orders/{order_id}', headers=admin_headers)
+        self.assertEqual(res_detail.status_code, 200)
+
+        # 6. Another customer logs in and tries to view it — should get 404
+        # Register a second customer
+        reg_payload = {"username": "customer_two", "email": "two@example.com", "password": "password_two"}
+        self.client.post('/users', json=reg_payload)
+        login_res = self.client.post('/auth/login', json={"username": "customer_two", "password": "password_two"})
+        other_token = login_res.get_json()['data']['token']
+        other_headers = {"Authorization": f"Bearer {other_token}"}
+
+        res_forbidden_get = self.client.get(f'/orders/{order_id}', headers=other_headers)
+        self.assertEqual(res_forbidden_get.status_code, 404)
+
+        # 7. Other customer tries to delete/reject it — should get 404
+        res_forbidden_del = self.client.delete(f'/orders/{order_id}', headers=other_headers)
+        self.assertEqual(res_forbidden_del.status_code, 404)
+
+        # 8. Admin cancels/rejects the order — should succeed (returns 204)
+        res_delete = self.client.delete(f'/orders/{order_id}', headers=admin_headers)
+        self.assertEqual(res_delete.status_code, 204)
+
+        # Cleanup other customer
+        user_two = User.query.filter_by(username="customer_two").first()
+        if user_two:
+            db.session.delete(user_two)
+            db.session.commit()
+
 if __name__ == '__main__':
     unittest.main()
+
 

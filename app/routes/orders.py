@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.order import Order, order_items
 from app.models.product import Product
+from app.models.user import User
 from app.schemas import (
     OrderCreateInputSchema,
     OrderResponseWrapperSchema,
@@ -107,9 +108,20 @@ def create_order(order_data):
 @jwt_required()
 @orders_bp.response(200, OrderListResponseSchema)
 def get_orders():
-    """List all orders for the current user."""
+    """List all orders. Admins/Sellers/Superadmins see all orders, customers see only their own."""
     user_id = int(get_jwt_identity())
-    orders = Order.query.filter_by(user_id=user_id).all()
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({
+            "error_code": "UNAUTHORIZED",
+            "message": "User not found."
+        }), 401
+
+    if user.role in ['superadmin', 'admin', 'seller']:
+        orders = Order.query.all()
+    else:
+        orders = Order.query.filter_by(user_id=user_id).all()
+        
     return jsonify({
         "data": [o.to_dict() for o in orders]
     }), 200
@@ -118,10 +130,17 @@ def get_orders():
 @jwt_required()
 @orders_bp.response(200, OrderResponseWrapperSchema)
 def get_order_by_id(id):
-    """View a specific order with its order items and product details."""
+    """View a specific order. Admins/Sellers/Superadmins can view any order, customers only their own."""
     user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({
+            "error_code": "UNAUTHORIZED",
+            "message": "User not found."
+        }), 401
+
     order = db.session.get(Order, id)
-    if not order or order.user_id != user_id:
+    if not order or (user.role == 'customer' and order.user_id != user_id):
         return jsonify({
             "error_code": "NOT_FOUND",
             "message": f"Order with ID {id} not found."
@@ -160,10 +179,17 @@ def get_order_by_id(id):
 @orders_bp.route('/orders/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_order(id):
-    """Delete an order, clearing foreign key restrictions in order_items first."""
+    """Delete an order. Admins/Sellers/Superadmins can cancel any order, customers only their own."""
     user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({
+            "error_code": "UNAUTHORIZED",
+            "message": "User not found."
+        }), 401
+
     order = db.session.get(Order, id)
-    if not order or order.user_id != user_id:
+    if not order or (user.role == 'customer' and order.user_id != user_id):
         return jsonify({
             "error_code": "NOT_FOUND",
             "message": f"Order with ID {id} not found."
@@ -173,4 +199,6 @@ def delete_order(id):
     db.session.execute(order_items.delete().where(order_items.c.order_id == id))
     db.session.delete(order)
     db.session.commit()
+
     return '', 204
+
