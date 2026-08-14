@@ -23,8 +23,7 @@ def create_order(order_data):
 
     if not items:
         return jsonify({
-            "success": False,
-            "error": "Validation Error",
+            "error_code": "VALIDATION_ERROR",
             "message": "Order must contain at least one item."
         }), 400
 
@@ -37,30 +36,26 @@ def create_order(order_data):
         qty = item.get('quantity')
         if qty is None or qty <= 0:
             return jsonify({
-                "success": False,
-                "error": "Validation Error",
+                "error_code": "VALIDATION_ERROR",
                 "message": "Quantity cannot be null, zero, or negative."
             }), 400
 
         product = db.session.get(Product, prod_id)
         if not product or not product.is_active:
             return jsonify({
-                "success": False,
-                "error": "Not Found",
+                "error_code": "NOT_FOUND",
                 "message": f"Product with ID {prod_id} not found."
             }), 400
 
         if product.price is None or float(product.price) <= 0:
             return jsonify({
-                "success": False,
-                "error": "Validation Error",
+                "error_code": "VALIDATION_ERROR",
                 "message": f"Price at purchase for product '{product.name}' cannot be null, zero, or negative."
             }), 400
 
         if product.stock is None or product.stock < qty:
             return jsonify({
-                "success": False,
-                "error": "Bad Request",
+                "error_code": "BAD_REQUEST",
                 "message": f"Insufficient stock for product '{product.name}'."
             }), 400
 
@@ -71,8 +66,7 @@ def create_order(order_data):
 
     if total_amount is None or total_amount < 0:
         return jsonify({
-            "success": False,
-            "error": "Validation Error",
+            "error_code": "VALIDATION_ERROR",
             "message": "Total amount cannot be null or negative."
         }), 400
 
@@ -112,8 +106,6 @@ def create_order(order_data):
     order_payload['items'] = detailed_items
 
     return jsonify({
-        "success": True,
-        "message": "Order placed successfully",
         "data": order_payload
     }), 201
 
@@ -125,9 +117,7 @@ def get_orders():
     user_id = int(get_jwt_identity())
     orders = Order.query.filter_by(user_id=user_id).all()
     return jsonify({
-        "success": True,
-        "data": [o.to_dict() for o in orders],
-        "count": len(orders)
+        "data": [o.to_dict() for o in orders]
     }), 200
 
 @orders_bp.route('/orders/<int:id>', methods=['GET'])
@@ -139,8 +129,7 @@ def get_order_by_id(id):
     order = db.session.get(Order, id)
     if not order or order.user_id != user_id:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Order with ID {id} not found."
         }), 404
 
@@ -171,7 +160,6 @@ def get_order_by_id(id):
     order_payload['items'] = detailed_items
 
     return jsonify({
-        "success": True,
         "data": order_payload
     }), 200
 
@@ -183,8 +171,7 @@ def delete_order(id):
     order = db.session.get(Order, id)
     if not order or order.user_id != user_id:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Order with ID {id} not found."
         }), 404
 
@@ -194,6 +181,5 @@ def delete_order(id):
     db.session.commit()
 
     return jsonify({
-        "success": True,
-        "message": "Order deleted successfully"
+        "data": None
     }), 200

@@ -46,9 +46,7 @@ def get_all_products():
         data.append(d)
 
     return jsonify({
-        "success": True,
-        "data": data,
-        "count": len(data)
+        "data": data
     }), 200
 
 @products_bp.route('/products/<int:id>', methods=['GET'])
@@ -65,8 +63,7 @@ def get_product_by_id(id):
 
     if not product:
         return jsonify({
-            "success": False,
-            "error": "Product not found",
+            "error_code": "NOT_FOUND",
             "message": f"No product exists with ID {id}"
         }), 404
         
@@ -74,7 +71,6 @@ def get_product_by_id(id):
     prod_dict['images'] = [img.to_dict() for img in product.images]
 
     return jsonify({
-        "success": True,
         "data": prod_dict
     }), 200
 
@@ -88,8 +84,7 @@ def create_product(product_data):
     if product_data.get('category_id'):
         if not db.session.get(Category, product_data['category_id']):
             return jsonify({
-                "success": False,
-                "error": "Validation Error",
+                "error_code": "VALIDATION_ERROR",
                 "message": "Category not found."
             }), 400
 
@@ -98,7 +93,6 @@ def create_product(product_data):
     db.session.commit()
 
     if images_data:
-        # Default the first image to primary if none is selected
         if not any(img.get('is_primary') for img in images_data):
             images_data[0]['is_primary'] = True
 
@@ -115,8 +109,6 @@ def create_product(product_data):
     prod_dict['images'] = [img.to_dict() for img in new_product.images]
 
     return jsonify({
-        "success": True,
-        "message": "Product created successfully",
         "data": prod_dict
     }), 201
 
@@ -128,16 +120,14 @@ def update_product(product_data, id):
     product = db.session.get(Product, id)
     if not product:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Product with ID {id} not found."
-          }), 404
+        }), 404
 
     if product_data.get('category_id'):
         if not db.session.get(Category, product_data['category_id']):
             return jsonify({
-                "success": False,
-                "error": "Validation Error",
+                "error_code": "VALIDATION_ERROR",
                 "message": "Category not found."
             }), 400
 
@@ -166,8 +156,6 @@ def update_product(product_data, id):
     prod_dict['images'] = [img.to_dict() for img in product.images]
 
     return jsonify({
-        "success": True,
-        "message": "Product updated successfully",
         "data": prod_dict
     }), 200
 
@@ -177,22 +165,19 @@ def delete_product(id):
     product = db.session.get(Product, id)
     if not product:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Product with ID {id} not found."
         }), 404
 
     has_orders = db.session.query(order_items).filter_by(product_id=id).first() is not None
     if has_orders:
         return jsonify({
-            "success": False,
-            "error": "Conflict",
+            "error_code": "CONFLICT",
             "message": "Cannot delete product because it is linked to existing orders."
         }), 400
 
     db.session.delete(product)
     db.session.commit()
     return jsonify({
-        "success": True,
-        "message": "Product deleted successfully"
+        "data": None
     }), 200

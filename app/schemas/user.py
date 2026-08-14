@@ -21,8 +21,6 @@ class UserRegisterInputSchema(Schema):
             raise ValidationError("Either 'password' or 'password_hash' must be provided.")
 
 class UserRegisterResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
-    message = fields.Str(dump_only=True)
     data = fields.Nested(UserSchema, dump_only=True)
 
 class UserLoginInputSchema(Schema):
@@ -35,13 +33,7 @@ class UserLoginInputSchema(Schema):
         if not data.get("username") and not data.get("email"):
             raise ValidationError("Either 'username' or 'email' must be provided.")
 
-class UserLoginResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
-    message = fields.Str(dump_only=True)
-    data = fields.Nested(UserSchema, dump_only=True)
-
 class UserGetResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.Nested(UserSchema, dump_only=True)
 
 class AuthLoginResponseDataSchema(Schema):
@@ -49,6 +41,4 @@ class AuthLoginResponseDataSchema(Schema):
     user = fields.Nested(UserSchema, dump_only=True)
 
 class AuthLoginResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
-    message = fields.Str(dump_only=True)
     data = fields.Nested(AuthLoginResponseDataSchema, dump_only=True)

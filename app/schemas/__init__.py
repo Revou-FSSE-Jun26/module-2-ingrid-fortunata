@@ -3,7 +3,6 @@ from app.schemas.user import (
     UserRegisterInputSchema,
     UserRegisterResponseSchema,
     UserLoginInputSchema,
-    UserLoginResponseSchema,
     UserGetResponseSchema,
     AuthLoginResponseSchema,
 )

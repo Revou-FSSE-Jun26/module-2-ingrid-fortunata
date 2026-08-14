@@ -22,14 +22,10 @@ class CategoryUpdateInputSchema(Schema):
     is_active = fields.Bool()
 
 class CategoryGetResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.Nested(CategorySchema, dump_only=True)
 
 class CategoryWithProductsResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.Nested(CategoryWithProductsSchema, dump_only=True)
 
 class CategoryListResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.List(fields.Nested(CategorySchema), dump_only=True)
-    count = fields.Int(dump_only=True)

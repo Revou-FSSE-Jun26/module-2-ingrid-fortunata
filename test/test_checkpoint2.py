@@ -21,7 +21,6 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- GET /products Output ---")
         print(json.dumps(data, indent=2))
-        self.assertTrue(data['success'])
         self.assertGreaterEqual(len(data['data']), 2)
 
     def test_02_get_product_by_id_success(self):
@@ -31,7 +30,6 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- GET /products/1 Output ---")
         print(json.dumps(data, indent=2))
-        self.assertTrue(data['success'])
         self.assertEqual(data['data']['id'], 1)
 
     def test_03_get_product_by_id_not_found(self):
@@ -41,7 +39,7 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- GET /products/999 (Not Found) Output ---")
         print(json.dumps(data, indent=2))
-        self.assertFalse(data['success'])
+        self.assertEqual(data['error_code'], 'NOT_FOUND')
 
     def test_04_post_user_register(self):
         """POST /users creating a User with db.session.add and db.session.commit"""
@@ -67,7 +65,6 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- POST /users (Register) Output ---")
         print(json.dumps(data, indent=2))
-        self.assertTrue(data['success'])
         self.assertEqual(data['data']['username'], "bob_builder")
         self.assertIn('role', data['data'])
 
@@ -81,7 +78,6 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print(f"\n--- GET /users/{user.id} (Retrieve) Output ---")
         print(json.dumps(data, indent=2))
-        self.assertTrue(data['success'])
         self.assertEqual(data['data']['username'], "bob_builder")
 
     def test_06_get_user_by_id_not_found(self):
@@ -91,7 +87,7 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- GET /users/9999 (Not Found) Output ---")
         print(json.dumps(data, indent=2))
-        self.assertFalse(data['success'])
+        self.assertEqual(data['error_code'], 'NOT_FOUND')
 
 if __name__ == '__main__':
     unittest.main()
