@@ -140,7 +140,8 @@ def get_order_by_id(id):
         }), 401
 
     order = db.session.get(Order, id)
-    if not order or (user.role == 'customer' and order.user_id != user_id):
+    is_admin = user.role in ['superadmin', 'admin', 'seller']
+    if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
             "error_code": "NOT_FOUND",
             "message": f"Order with ID {id} not found."
@@ -189,11 +190,13 @@ def delete_order(id):
         }), 401
 
     order = db.session.get(Order, id)
-    if not order or (user.role == 'customer' and order.user_id != user_id):
+    is_admin = user.role in ['superadmin', 'admin', 'seller']
+    if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
             "error_code": "NOT_FOUND",
             "message": f"Order with ID {id} not found."
         }), 404
+
 
     # Delete order_items first due to RESTRICT constraint
     db.session.execute(order_items.delete().where(order_items.c.order_id == id))
