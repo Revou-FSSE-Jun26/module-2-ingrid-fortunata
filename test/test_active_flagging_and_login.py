@@ -22,7 +22,11 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         
-        self.assertTrue(data['success'])
+    def test_01_get_all_products_excludes_inactive(self):
+        """GET /products should only return active products in active categories."""
+        response = self.client.get('/products')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
         
         # Verify that only active products are in the list
         product_names = [p['name'] for p in data['data']]
@@ -43,7 +47,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertIsNotNone(active_prod)
         response = self.client.get(f'/products/{active_prod.id}')
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.get_json()['success'])
 
         # Find inactive product
         inactive_prod = Product.query.filter_by(name='Deactivated Phone').first()
@@ -66,7 +69,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 400)
-        self.assertFalse(response.get_json()['success'])
 
         # Missing identity
         response = self.client.post(
@@ -75,7 +77,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 400)
-        self.assertFalse(response.get_json()['success'])
 
     def test_04_login_success_username(self):
         """POST /auth/login succeeds using username (hashed password check)."""
@@ -90,7 +91,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertTrue(data['success'])
         self.assertIn('token', data['data'])
         self.assertEqual(data['data']['user']['username'], "alice_smith")
         self.assertTrue(data['data']['user']['is_active'])
@@ -108,7 +108,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertTrue(data['success'])
         self.assertIn('token', data['data'])
         self.assertEqual(data['data']['user']['username'], "alice_smith")
 
@@ -135,7 +134,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertTrue(data['success'])
         self.assertIn('token', data['data'])
         self.assertEqual(data['data']['user']['username'], "plain_user")
 
@@ -156,7 +154,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 401)
-        self.assertFalse(response.get_json()['success'])
 
         # Non-existent user
         payload = {
@@ -169,7 +166,6 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 401)
-        self.assertFalse(response.get_json()['success'])
 
     def test_08_login_failed_deactivated_user(self):
         """POST /auth/login fails with 403 Forbidden for deactivated users."""
@@ -184,8 +180,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 403)
         data = response.get_json()
-        self.assertFalse(data['success'])
-        self.assertEqual(data['error'], 'Forbidden')
+        self.assertEqual(data['error_code'], 'FORBIDDEN')
         self.assertEqual(data['message'], 'Account is deactivated.')
 
 if __name__ == '__main__':

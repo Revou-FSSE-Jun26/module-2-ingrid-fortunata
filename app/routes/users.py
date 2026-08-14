@@ -22,8 +22,7 @@ def register_user(user_data):
 
     if not username or not email or not raw_password:
         return jsonify({
-            'success': False,
-            'error': 'Validation Error',
+            'error_code': 'VALIDATION_ERROR',
             'message': 'username, email, and password (or password_hash) are required.'
         }), 400
 
@@ -35,15 +34,13 @@ def register_user(user_data):
 
     if User.query.filter_by(username=username).first():
         return jsonify({
-            'success': False,
-            'error': 'Conflict',
+            'error_code': 'CONFLICT',
             'message': 'Username already exists.'
         }), 400
 
     if User.query.filter_by(email=email).first():
         return jsonify({
-            'success': False,
-            'error': 'Conflict',
+            'error_code': 'CONFLICT',
             'message': 'Email already exists.'
         }), 400
 
@@ -60,8 +57,6 @@ def register_user(user_data):
     db.session.commit()
 
     return jsonify({
-        'success': True,
-        'message': 'User registered successfully',
         'data': new_user.to_dict()
     }), 201
 
@@ -72,13 +67,11 @@ def get_user_by_id(id):
     user = db.session.get(User, id)
     if not user:
         return jsonify({
-            'success': False,
-            'error': 'Not Found',
+            'error_code': 'NOT_FOUND',
             'message': f'User with ID {id} not found.'
         }), 404
 
     return jsonify({
-        'success': True,
         'data': user.to_dict()
     }), 200
 
@@ -92,8 +85,7 @@ def login_auth(login_data):
 
     if not identity or not password:
         return jsonify({
-            'success': False,
-            'error': 'Validation Error',
+            'error_code': 'VALIDATION_ERROR',
             'message': 'username/email and password are required.'
         }), 400
 
@@ -101,8 +93,7 @@ def login_auth(login_data):
 
     if not user:
         return jsonify({
-            'success': False,
-            'error': 'Unauthorized',
+            'error_code': 'UNAUTHORIZED',
             'message': 'Invalid username/email or password.'
         }), 401
 
@@ -122,22 +113,18 @@ def login_auth(login_data):
 
     if not is_password_correct:
         return jsonify({
-            'success': False,
-            'error': 'Unauthorized',
+            'error_code': 'UNAUTHORIZED',
             'message': 'Invalid username/email or password.'
         }), 401
 
     if not user.is_active:
         return jsonify({
-            'success': False,
-            'error': 'Forbidden',
+            'error_code': 'FORBIDDEN',
             'message': 'Account is deactivated.'
         }), 403
 
     token = create_access_token(identity=str(user.id))
     return jsonify({
-        'success': True,
-        'message': 'Login successful',
         'data': {
             'token': token,
             'user': user.to_dict()

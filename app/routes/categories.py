@@ -20,8 +20,7 @@ def create_category(category_data):
     name = category_data.get('name')
     if Category.query.filter_by(name=name).first():
         return jsonify({
-            "success": False,
-            "error": "Conflict",
+            "error_code": "CONFLICT",
             "message": "Category name already exists."
         }), 400
 
@@ -29,8 +28,6 @@ def create_category(category_data):
     db.session.add(new_cat)
     db.session.commit()
     return jsonify({
-        "success": True,
-        "message": "Category created successfully",
         "data": new_cat.to_dict()
     }), 201
 
@@ -40,9 +37,7 @@ def get_categories():
     """List all categories."""
     categories = Category.query.all()
     return jsonify({
-        "success": True,
-        "data": [c.to_dict() for c in categories],
-        "count": len(categories)
+        "data": [c.to_dict() for c in categories]
     }), 200
 
 @categories_bp.route('/categories/<int:id>', methods=['GET'])
@@ -52,8 +47,7 @@ def get_category_by_id(id):
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Category with ID {id} not found."
         }), 404
 
@@ -61,7 +55,6 @@ def get_category_by_id(id):
     cat_dict = category.to_dict()
     cat_dict['products'] = [p.to_dict() for p in category.products]
     return jsonify({
-        "success": True,
         "data": cat_dict
     }), 200
 
@@ -73,8 +66,7 @@ def update_category(category_data, id):
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Category with ID {id} not found."
         }), 404
 
@@ -82,8 +74,7 @@ def update_category(category_data, id):
     if name and name != category.name:
         if Category.query.filter_by(name=name).first():
             return jsonify({
-                "success": False,
-                "error": "Conflict",
+                "error_code": "CONFLICT",
                 "message": "Category name already exists."
             }), 400
 
@@ -92,8 +83,6 @@ def update_category(category_data, id):
 
     db.session.commit()
     return jsonify({
-        "success": True,
-        "message": "Category updated successfully",
         "data": category.to_dict()
     }), 200
 
@@ -103,14 +92,12 @@ def delete_category(id):
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
-            "success": False,
-            "error": "Not Found",
+            "error_code": "NOT_FOUND",
             "message": f"Category with ID {id} not found."
         }), 404
 
     db.session.delete(category)
     db.session.commit()
     return jsonify({
-        "success": True,
-        "message": "Category deleted successfully"
+        "data": None
     }), 200

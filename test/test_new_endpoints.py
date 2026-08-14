@@ -19,7 +19,6 @@ class NewEndpointsTestCase(unittest.TestCase):
         response = self.client.post('/auth/login', json=payload)
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertTrue(data['success'])
         self.assertIn('token', data['data'])
         self.assertEqual(data['data']['user']['username'], "alice_smith")
 
@@ -48,7 +47,7 @@ class NewEndpointsTestCase(unittest.TestCase):
         # Test delete block (linked to order seed data)
         res = self.client.delete('/products/1') # Product ID 1 is linked to seeded orders
         self.assertEqual(res.status_code, 400)
-        self.assertFalse(res.get_json()['success'])
+        self.assertEqual(res.get_json()['error_code'], 'CONFLICT')
 
     def test_product_images_crud_and_validation(self):
         # Test validation - over 3 images
@@ -128,7 +127,7 @@ class NewEndpointsTestCase(unittest.TestCase):
         # Test list
         res = self.client.get('/categories')
         self.assertEqual(res.status_code, 200)
-        self.assertGreaterEqual(res.get_json()['count'], 1)
+        self.assertGreaterEqual(len(res.get_json()['data']), 1)
 
         # Test get single with products
         res = self.client.get(f'/categories/{cat_id}')
@@ -177,7 +176,7 @@ class NewEndpointsTestCase(unittest.TestCase):
         # Get order list
         res = self.client.get('/orders', headers=headers)
         self.assertEqual(res.status_code, 200)
-        self.assertGreaterEqual(res.get_json()['count'], 1)
+        self.assertGreaterEqual(len(res.get_json()['data']), 1)
 
         # Get specific order details
         res = self.client.get(f'/orders/{order_id}', headers=headers)

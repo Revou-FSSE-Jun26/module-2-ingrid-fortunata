@@ -90,17 +90,13 @@ class ProductListSchema(ProductSchema):
     primary_image = fields.Str(dump_only=True)
 
 class ProductListResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.List(fields.Nested(ProductListSchema), dump_only=True)
-    count = fields.Int(dump_only=True)
 
 class ProductGetResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.Nested(ProductSchema, dump_only=True)
 
 class ProductDetailSchema(ProductSchema):
     images = fields.List(fields.Nested(ProductImageSchema), dump_only=True)
 
 class ProductDetailResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.Nested(ProductDetailSchema, dump_only=True)

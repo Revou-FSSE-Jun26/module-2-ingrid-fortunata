@@ -36,11 +36,7 @@ class OrderDetailSchema(OrderResponseSchema):
     items = fields.List(fields.Nested(OrderDetailItemSchema), dump_only=True)
 
 class OrderResponseWrapperSchema(Schema):
-    success = fields.Bool(dump_only=True)
-    message = fields.Str(dump_only=True)
     data = fields.Nested(OrderDetailSchema, dump_only=True)
 
 class OrderListResponseSchema(Schema):
-    success = fields.Bool(dump_only=True)
     data = fields.List(fields.Nested(OrderResponseSchema), dump_only=True)
-    count = fields.Int(dump_only=True)
