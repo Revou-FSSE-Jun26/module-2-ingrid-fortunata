@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, validates, ValidationError
+from marshmallow import Schema, fields
 from app.schemas.product import ProductSchema
 
 class CategorySchema(Schema):

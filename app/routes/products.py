@@ -6,7 +6,6 @@ from app.models.category import Category
 from app.models.order import order_items
 from app.schemas import (
     ProductListResponseSchema,
-    ProductGetResponseSchema,
     ProductCreateInputSchema,
     ProductUpdateInputSchema,
     ProductDetailResponseSchema,
@@ -174,10 +173,8 @@ def delete_product(id):
         return jsonify({
             "error_code": "CONFLICT",
             "message": "Cannot delete product because it is linked to existing orders."
-        }), 400
+        }), 409
 
     db.session.delete(product)
     db.session.commit()
-    return jsonify({
-        "data": None
-    }), 200
+    return '', 204

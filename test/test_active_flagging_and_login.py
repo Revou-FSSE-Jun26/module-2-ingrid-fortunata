@@ -82,7 +82,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         """POST /auth/login succeeds using username (hashed password check)."""
         payload = {
             "username": "alice_smith",
-            "password": "hash_sample_alice"
+            "password": "alice_password"
         }
         response = self.client.post(
             '/auth/login',
@@ -99,7 +99,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         """POST /auth/login succeeds using email (hashed password check)."""
         payload = {
             "email": "alice@example.com",
-            "password": "hash_sample_alice"
+            "password": "alice_password"
         }
         response = self.client.post(
             '/auth/login',
@@ -171,7 +171,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         """POST /auth/login fails with 403 Forbidden for deactivated users."""
         payload = {
             "username": "deactivated_user",
-            "password": "password_deactivated"
+            "password": "deactivated_password"
         }
         response = self.client.post(
             '/auth/login',

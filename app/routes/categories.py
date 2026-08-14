@@ -98,6 +98,4 @@ def delete_category(id):
 
     db.session.delete(category)
     db.session.commit()
-    return jsonify({
-        "data": None
-    }), 200
+    return '', 204

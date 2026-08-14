@@ -13,24 +13,13 @@ users_bp = Blueprint('users', __name__, description='Operations on users')
 @users_bp.response(201, UserRegisterResponseSchema)
 def register_user(user_data):
     """Register a new user with password hashing."""
-    data = user_data
-    
-    username = data.get('username')
-    email = data.get('email')
-    raw_password = data.get('password') or data.get('password_hash')
-    role = data.get('role', 'user')
+    username = user_data.get('username')
+    email = user_data.get('email')
+    raw_password = user_data.get('password') or user_data.get('password_hash')
+    role = user_data.get('role', 'user')
 
-    if not username or not email or not raw_password:
-        return jsonify({
-            'error_code': 'VALIDATION_ERROR',
-            'message': 'username, email, and password (or password_hash) are required.'
-        }), 400
-
-    # Hash password if not already hashed
-    if raw_password and not raw_password.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
-        password_hash = generate_password_hash(raw_password)
-    else:
-        password_hash = raw_password
+    # Hash password
+    password_hash = generate_password_hash(raw_password)
 
     if User.query.filter_by(username=username).first():
         return jsonify({
@@ -50,8 +39,7 @@ def register_user(user_data):
         password_hash=password_hash
     )
     
-    if hasattr(User, 'role'):
-        setattr(new_user, 'role', role)
+    new_user.role = role
 
     db.session.add(new_user)
     db.session.commit()
@@ -103,12 +91,8 @@ def login_auth(login_data):
             is_password_correct = check_password_hash(user.password_hash, password)
         except ValueError:
             is_password_correct = False
-        
-        if not is_password_correct:
-            parts = user.password_hash.split(':')
-            if len(parts) > 1 and parts[-1] == password:
-                is_password_correct = True
     else:
+        # Plaintext fallback for legacy/test users
         is_password_correct = (user.password_hash == password)
 
     if not is_password_correct:

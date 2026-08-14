@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.category import Category
 from app.models.product import Product
 from app.models.order import Order, order_items
+from werkzeug.security import generate_password_hash
 
 def seed_database():
     app = create_app()
@@ -91,28 +92,35 @@ def seed_database():
 
         db.session.commit()
 
-        # 3. Ensure User
+        # 3. Ensure Users — passwords are stored as real bcrypt/pbkdf2 hashes
         alice = User.query.filter_by(username='alice_smith').first()
         if not alice:
             alice = User(
                 username='alice_smith',
                 email='alice@example.com',
-                password_hash='pbkdf2:sha256:hash_sample_alice',
+                password_hash=generate_password_hash('alice_password'),
                 role='customer',
                 is_active=True
             )
             db.session.add(alice)
+        else:
+            # Update to a real hash if currently using the old fake prefix
+            if alice.password_hash.startswith('pbkdf2:sha256:hash_sample'):
+                alice.password_hash = generate_password_hash('alice_password')
 
         deactivated_user = User.query.filter_by(username='deactivated_user').first()
         if not deactivated_user:
             deactivated_user = User(
                 username='deactivated_user',
                 email='deactivated@example.com',
-                password_hash='password_deactivated',
+                password_hash=generate_password_hash('deactivated_password'),
                 role='customer',
                 is_active=False
             )
             db.session.add(deactivated_user)
+        else:
+            if not deactivated_user.password_hash.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
+                deactivated_user.password_hash = generate_password_hash('deactivated_password')
 
         db.session.commit()
 
