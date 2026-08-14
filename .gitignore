@@ -39,3 +39,8 @@ env/
 *.swo
 *~
 .DS_Store
+
+# Superpowers / Internal Planning Docs
+.superpowers/
+docs/superpowers/
+
