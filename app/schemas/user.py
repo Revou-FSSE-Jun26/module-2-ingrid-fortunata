@@ -43,3 +43,12 @@ class UserLoginResponseSchema(Schema):
 class UserGetResponseSchema(Schema):
     success = fields.Bool(dump_only=True)
     data = fields.Nested(UserSchema, dump_only=True)
+
+class AuthLoginResponseDataSchema(Schema):
+    token = fields.Str(dump_only=True)
+    user = fields.Nested(UserSchema, dump_only=True)
+
+class AuthLoginResponseSchema(Schema):
+    success = fields.Bool(dump_only=True)
+    message = fields.Str(dump_only=True)
+    data = fields.Nested(AuthLoginResponseDataSchema, dump_only=True)

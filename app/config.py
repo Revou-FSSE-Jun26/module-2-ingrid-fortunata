@@ -1,11 +1,14 @@
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 # Load environment variables from .env file
 load_dotenv()
 
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'default-dev-key-revoshop')
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
     
     # Configure PostgreSQL database URI
     DATABASE_URL = os.getenv('DATABASE_URL')

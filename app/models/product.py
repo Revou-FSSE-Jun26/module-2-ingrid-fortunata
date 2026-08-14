@@ -14,6 +14,7 @@ class Product(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True, server_default='true', nullable=False)
 
+    images = db.relationship('ProductImage', backref='product', cascade='all, delete-orphan', lazy=True)
 
     def to_dict(self):
         return {
@@ -26,4 +27,21 @@ class Product(db.Model):
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class ProductImage(db.Model):
+    __tablename__ = 'product_images'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
+    image_base64 = db.Column(db.Text, nullable=False)
+    is_primary = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'image_base64': self.image_base64,
+            'is_primary': self.is_primary,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
