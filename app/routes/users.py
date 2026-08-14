@@ -16,7 +16,7 @@ def register_user(user_data):
     username = user_data.get('username')
     email = user_data.get('email')
     raw_password = user_data.get('password') or user_data.get('password_hash')
-    role = user_data.get('role', 'user')
+    role = user_data.get('role', 'customer')
 
     # Hash password
     password_hash = generate_password_hash(raw_password)

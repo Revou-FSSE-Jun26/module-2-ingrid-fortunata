@@ -93,6 +93,39 @@ def seed_database():
         db.session.commit()
 
         # 3. Ensure Users — passwords are stored as real bcrypt/pbkdf2 hashes
+        superadmin = User.query.filter_by(username='superadmin_user').first()
+        if not superadmin:
+            superadmin = User(
+                username='superadmin_user',
+                email='superadmin@example.com',
+                password_hash=generate_password_hash('superadmin_password'),
+                role='superadmin',
+                is_active=True
+            )
+            db.session.add(superadmin)
+
+        admin = User.query.filter_by(username='admin_user').first()
+        if not admin:
+            admin = User(
+                username='admin_user',
+                email='admin@example.com',
+                password_hash=generate_password_hash('admin_password'),
+                role='admin',
+                is_active=True
+            )
+            db.session.add(admin)
+
+        seller = User.query.filter_by(username='seller_user').first()
+        if not seller:
+            seller = User(
+                username='seller_user',
+                email='seller@example.com',
+                password_hash=generate_password_hash('seller_password'),
+                role='seller',
+                is_active=True
+            )
+            db.session.add(seller)
+
         alice = User.query.filter_by(username='alice_smith').first()
         if not alice:
             alice = User(
@@ -103,10 +136,6 @@ def seed_database():
                 is_active=True
             )
             db.session.add(alice)
-        else:
-            # Update to a real hash if currently using the old fake prefix
-            if alice.password_hash.startswith('pbkdf2:sha256:hash_sample'):
-                alice.password_hash = generate_password_hash('alice_password')
 
         deactivated_user = User.query.filter_by(username='deactivated_user').first()
         if not deactivated_user:
@@ -118,9 +147,6 @@ def seed_database():
                 is_active=False
             )
             db.session.add(deactivated_user)
-        else:
-            if not deactivated_user.password_hash.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
-                deactivated_user.password_hash = generate_password_hash('deactivated_password')
 
         db.session.commit()
 

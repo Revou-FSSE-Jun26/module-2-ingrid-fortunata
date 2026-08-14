@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models.product import Product, ProductImage
 from app.models.category import Category
 from app.models.order import order_items
+from app.auth import roles_required
 from app.schemas import (
     ProductListResponseSchema,
     ProductCreateInputSchema,
@@ -74,6 +75,7 @@ def get_product_by_id(id):
     }), 200
 
 @products_bp.route('/products', methods=['POST'])
+@roles_required('superadmin', 'admin', 'seller')
 @products_bp.arguments(ProductCreateInputSchema, location='json')
 @products_bp.response(201, ProductDetailResponseSchema)
 def create_product(product_data):
@@ -112,6 +114,7 @@ def create_product(product_data):
     }), 201
 
 @products_bp.route('/products/<int:id>', methods=['PUT'])
+@roles_required('superadmin', 'admin', 'seller')
 @products_bp.arguments(ProductUpdateInputSchema, location='json')
 @products_bp.response(200, ProductDetailResponseSchema)
 def update_product(product_data, id):
@@ -159,6 +162,7 @@ def update_product(product_data, id):
     }), 200
 
 @products_bp.route('/products/<int:id>', methods=['DELETE'])
+@roles_required('superadmin', 'admin', 'seller')
 def delete_product(id):
     """Delete a product, blocked if linked to any orders."""
     product = db.session.get(Product, id)

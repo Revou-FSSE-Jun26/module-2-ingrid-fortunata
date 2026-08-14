@@ -14,6 +14,18 @@ class NewEndpointsTestCase(unittest.TestCase):
     def tearDown(self):
         self.app_context.pop()
 
+    def _get_admin_headers(self):
+        payload = {"username": "admin_user", "password": "admin_password"}
+        res = self.client.post('/auth/login', json=payload)
+        token = res.get_json()['data']['token']
+        return {"Authorization": f"Bearer {token}"}
+
+    def _get_customer_headers(self):
+        payload = {"username": "alice_smith", "password": "alice_password"}
+        res = self.client.post('/auth/login', json=payload)
+        token = res.get_json()['data']['token']
+        return {"Authorization": f"Bearer {token}"}
+
     def test_auth_login_success(self):
         payload = {"username": "alice_smith", "password": "alice_password"}
         response = self.client.post('/auth/login', json=payload)
@@ -23,33 +35,37 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertEqual(data['data']['user']['username'], "alice_smith")
 
     def test_product_crud(self):
+        headers = self._get_admin_headers()
+
         # Test create validation fail (negative price)
         bad_payload = {"name": "Broken", "price": -5, "stock": 10}
-        res = self.client.post('/products', json=bad_payload)
+        res = self.client.post('/products', json=bad_payload, headers=headers)
         self.assertEqual(res.status_code, 400)
 
         # Test create success
         payload = {"name": "New Gaming Mouse", "price": 49.99, "stock": 20}
-        res = self.client.post('/products', json=payload)
+        res = self.client.post('/products', json=payload, headers=headers)
         self.assertEqual(res.status_code, 201)
         prod_id = res.get_json()['data']['id']
 
         # Test update
         up_payload = {"price": 39.99}
-        res = self.client.put(f'/products/{prod_id}', json=up_payload)
+        res = self.client.put(f'/products/{prod_id}', json=up_payload, headers=headers)
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()['data']['price'], 39.99)
 
         # Test delete success
-        res = self.client.delete(f'/products/{prod_id}')
+        res = self.client.delete(f'/products/{prod_id}', headers=headers)
         self.assertEqual(res.status_code, 204)
 
         # Test delete blocked (linked to order seed data)
-        res = self.client.delete('/products/1')  # Product ID 1 is linked to seeded orders
+        res = self.client.delete('/products/1', headers=headers)  # Product ID 1 is linked to seeded orders
         self.assertEqual(res.status_code, 409)
         self.assertEqual(res.get_json()['error_code'], 'CONFLICT')
 
     def test_product_images_crud_and_validation(self):
+        headers = self._get_admin_headers()
+
         # Test validation - over 3 images
         bad_payload = {
             "name": "Broken Mouse",
@@ -62,7 +78,7 @@ class NewEndpointsTestCase(unittest.TestCase):
                 {"image_base64": "img4"}
             ]
         }
-        res = self.client.post('/products', json=bad_payload)
+        res = self.client.post('/products', json=bad_payload, headers=headers)
         self.assertEqual(res.status_code, 400)
 
         # Test validation - size limit
@@ -72,7 +88,7 @@ class NewEndpointsTestCase(unittest.TestCase):
             "stock": 5,
             "images": [{"image_base64": "a" * 2000000}]
         }
-        res = self.client.post('/products', json=huge_payload)
+        res = self.client.post('/products', json=huge_payload, headers=headers)
         self.assertEqual(res.status_code, 400)
 
         # Test validation - multiple primary flags
@@ -85,7 +101,7 @@ class NewEndpointsTestCase(unittest.TestCase):
                 {"image_base64": "img2", "is_primary": True}
             ]
         }
-        res = self.client.post('/products', json=double_primary_payload)
+        res = self.client.post('/products', json=double_primary_payload, headers=headers)
         self.assertEqual(res.status_code, 400)
 
         # Test create success - defaults first to primary
@@ -98,7 +114,7 @@ class NewEndpointsTestCase(unittest.TestCase):
                 {"image_base64": "base64_data_2"}
             ]
         }
-        res = self.client.post('/products', json=success_payload)
+        res = self.client.post('/products', json=success_payload, headers=headers)
         self.assertEqual(res.status_code, 201)
         data = res.get_json()['data']
         prod_id = data['id']
@@ -115,12 +131,14 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertEqual(found[0]['primary_image'], "base64_data_1")
 
         # Cleanup
-        self.client.delete(f'/products/{prod_id}')
+        self.client.delete(f'/products/{prod_id}', headers=headers)
 
     def test_category_crud(self):
+        headers = self._get_admin_headers()
+
         # Test create success
         payload = {"name": "Kitchenware", "description": "Kitchen items"}
-        res = self.client.post('/categories', json=payload)
+        res = self.client.post('/categories', json=payload, headers=headers)
         self.assertEqual(res.status_code, 201)
         cat_id = res.get_json()['data']['id']
 
@@ -135,12 +153,12 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertIn('products', res.get_json()['data'])
 
         # Test update
-        res = self.client.put(f'/categories/{cat_id}', json={"name": "Kitchenware Upgraded"})
+        res = self.client.put(f'/categories/{cat_id}', json={"name": "Kitchenware Upgraded"}, headers=headers)
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()['data']['name'], "Kitchenware Upgraded")
 
         # Test delete
-        res = self.client.delete(f'/categories/{cat_id}')
+        res = self.client.delete(f'/categories/{cat_id}', headers=headers)
         self.assertEqual(res.status_code, 204)
 
     def test_order_lifecycle(self):
@@ -222,5 +240,20 @@ class NewEndpointsTestCase(unittest.TestCase):
         res = self.client.post('/orders', json=bad_payload_neg, headers=headers)
         self.assertEqual(res.status_code, 400)
 
+    def test_rbac_denied_for_customer(self):
+        headers = self._get_customer_headers()
+
+        # Test create category denied
+        payload = {"name": "Blocked Category"}
+        res = self.client.post('/categories', json=payload, headers=headers)
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.get_json()['error_code'], 'FORBIDDEN')
+
+        # Test create product denied
+        payload = {"name": "Blocked Product", "price": 10.00, "stock": 5}
+        res = self.client.post('/products', json=payload, headers=headers)
+        self.assertEqual(res.status_code, 403)
+
 if __name__ == '__main__':
     unittest.main()
+
