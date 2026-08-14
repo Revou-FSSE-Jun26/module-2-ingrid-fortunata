@@ -15,7 +15,7 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.app_context.pop()
 
     def test_auth_login_success(self):
-        payload = {"username": "alice_smith", "password": "hash_sample_alice"}
+        payload = {"username": "alice_smith", "password": "alice_password"}
         response = self.client.post('/auth/login', json=payload)
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
@@ -42,11 +42,11 @@ class NewEndpointsTestCase(unittest.TestCase):
 
         # Test delete success
         res = self.client.delete(f'/products/{prod_id}')
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 204)
 
-        # Test delete block (linked to order seed data)
-        res = self.client.delete('/products/1') # Product ID 1 is linked to seeded orders
-        self.assertEqual(res.status_code, 400)
+        # Test delete blocked (linked to order seed data)
+        res = self.client.delete('/products/1')  # Product ID 1 is linked to seeded orders
+        self.assertEqual(res.status_code, 409)
         self.assertEqual(res.get_json()['error_code'], 'CONFLICT')
 
     def test_product_images_crud_and_validation(self):
@@ -141,11 +141,11 @@ class NewEndpointsTestCase(unittest.TestCase):
 
         # Test delete
         res = self.client.delete(f'/categories/{cat_id}')
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 204)
 
     def test_order_lifecycle(self):
         # Login to get token
-        payload = {"username": "alice_smith", "password": "hash_sample_alice"}
+        payload = {"username": "alice_smith", "password": "alice_password"}
         res = self.client.post('/auth/login', json=payload)
         token = res.get_json()['data']['token']
         headers = {"Authorization": f"Bearer {token}"}
@@ -185,7 +185,7 @@ class NewEndpointsTestCase(unittest.TestCase):
 
         # Delete order
         res = self.client.delete(f'/orders/{order_id}', headers=headers)
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 204)
 
     def test_user_registration_password_hashing(self):
         # Register new user with raw password
@@ -208,7 +208,7 @@ class NewEndpointsTestCase(unittest.TestCase):
         db.session.commit()
 
     def test_order_item_quantity_validations(self):
-        payload = {"username": "alice_smith", "password": "hash_sample_alice"}
+        payload = {"username": "alice_smith", "password": "alice_password"}
         res = self.client.post('/auth/login', json=payload)
         token = res.get_json()['data']['token']
         headers = {"Authorization": f"Bearer {token}"}

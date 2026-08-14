@@ -45,7 +45,7 @@ def create_order(order_data):
             return jsonify({
                 "error_code": "NOT_FOUND",
                 "message": f"Product with ID {prod_id} not found."
-            }), 400
+            }), 404
 
         if product.price is None or float(product.price) <= 0:
             return jsonify({
@@ -63,12 +63,6 @@ def create_order(order_data):
         product.stock -= qty
         total_amount += float(product.price) * qty
         product_updates.append((product, qty))
-
-    if total_amount is None or total_amount < 0:
-        return jsonify({
-            "error_code": "VALIDATION_ERROR",
-            "message": "Total amount cannot be null or negative."
-        }), 400
 
     # Create order
     new_order = Order(
@@ -179,7 +173,4 @@ def delete_order(id):
     db.session.execute(order_items.delete().where(order_items.c.order_id == id))
     db.session.delete(order)
     db.session.commit()
-
-    return jsonify({
-        "data": None
-    }), 200
+    return '', 204

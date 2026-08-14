@@ -35,5 +35,3 @@ from app.schemas.order import (
     OrderResponseWrapperSchema,
     OrderListResponseSchema,
 )
-
-
