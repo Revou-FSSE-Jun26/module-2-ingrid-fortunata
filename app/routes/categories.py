@@ -1,5 +1,6 @@
 from flask_smorest import Blueprint
 from flask import jsonify
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.category import Category
 from app.auth import roles_required
@@ -22,13 +23,27 @@ def create_category(category_data):
     name = category_data.get('name')
     if Category.query.filter_by(name=name).first():
         return jsonify({
-            "error_code": "CONFLICT",
+            "error_code": "CATEGORY_CONFLICT",
             "message": "Category name already exists."
         }), 400
 
-    new_cat = Category(**category_data)
-    db.session.add(new_cat)
-    db.session.commit()
+    try:
+        new_cat = Category(**category_data)
+        db.session.add(new_cat)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "CATEGORY_CONFLICT",
+            "message": "Category name already exists."
+        }), 400
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "CATEGORY_DATABASE_ERROR",
+            "message": "An error occurred while creating the category."
+        }), 500
+
     return jsonify({
         "data": new_cat.to_dict()
     }), 201
@@ -49,7 +64,7 @@ def get_category_by_id(id):
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
-            "error_code": "NOT_FOUND",
+            "error_code": "CATEGORY_NOT_FOUND",
             "message": f"Category with ID {id} not found."
         }), 404
 
@@ -69,7 +84,7 @@ def update_category(category_data, id):
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
-            "error_code": "NOT_FOUND",
+            "error_code": "CATEGORY_NOT_FOUND",
             "message": f"Category with ID {id} not found."
         }), 404
 
@@ -77,14 +92,27 @@ def update_category(category_data, id):
     if name and name != category.name:
         if Category.query.filter_by(name=name).first():
             return jsonify({
-                "error_code": "CONFLICT",
+                "error_code": "CATEGORY_CONFLICT",
                 "message": "Category name already exists."
             }), 400
 
-    for key, val in category_data.items():
-        setattr(category, key, val)
+    try:
+        for key, val in category_data.items():
+            setattr(category, key, val)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "CATEGORY_CONFLICT",
+            "message": "Category name already exists."
+        }), 400
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "CATEGORY_DATABASE_ERROR",
+            "message": "An error occurred while updating the category."
+        }), 500
 
-    db.session.commit()
     return jsonify({
         "data": category.to_dict()
     }), 200
@@ -96,10 +124,18 @@ def delete_category(id):
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
-            "error_code": "NOT_FOUND",
+            "error_code": "CATEGORY_NOT_FOUND",
             "message": f"Category with ID {id} not found."
         }), 404
 
-    db.session.delete(category)
-    db.session.commit()
+    try:
+        db.session.delete(category)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "CATEGORY_DATABASE_ERROR",
+            "message": "An error occurred while deleting the category."
+        }), 500
+
     return '', 204
