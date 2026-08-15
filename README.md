@@ -241,7 +241,7 @@ The `status` column on the `orders` table tracks the lifecycle of an order.
 
 ---
 
-## Checkpoint 1: Database Design
+## Checkpoint 1: Database Design (Updated)
 
 This checkpoint focuses on the initial PostgreSQL schema and seed data.
 
@@ -257,7 +257,7 @@ The database consists of 5 tables:
 
 #### Database Schema Diagram
 
-![Database Schema Diagram](./img/diagram.png)
+![Database Schema Diagram](./img/diagram2.png)
 
 ---
 
