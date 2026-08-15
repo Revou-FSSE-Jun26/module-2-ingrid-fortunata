@@ -1,5 +1,6 @@
 from flask_smorest import Blueprint
 from flask import jsonify
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.user import User
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -23,13 +24,13 @@ def register_user(user_data):
 
     if User.query.filter_by(username=username).first():
         return jsonify({
-            'error_code': 'CONFLICT',
+            'error_code': 'USER_NAME_CONFLICT',
             'message': 'Username already exists.'
         }), 400
 
     if User.query.filter_by(email=email).first():
         return jsonify({
-            'error_code': 'CONFLICT',
+            'error_code': 'USER_EMAIL_CONFLICT',
             'message': 'Email already exists.'
         }), 400
 
@@ -41,8 +42,21 @@ def register_user(user_data):
     
     new_user.role = role
 
-    db.session.add(new_user)
-    db.session.commit()
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            'error_code': 'USER_CONFLICT',
+            'message': 'Username or email already exists.'
+        }), 400
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            'error_code': 'USER_DATABASE_ERROR',
+            'message': 'An error occurred while creating the user.'
+        }), 500
 
     return jsonify({
         'data': new_user.to_dict()
@@ -55,7 +69,7 @@ def get_user_by_id(id):
     user = db.session.get(User, id)
     if not user:
         return jsonify({
-            'error_code': 'NOT_FOUND',
+            'error_code': 'USER_NOT_FOUND',
             'message': f'User with ID {id} not found.'
         }), 404
 
@@ -73,7 +87,7 @@ def login_auth(login_data):
 
     if not identity or not password:
         return jsonify({
-            'error_code': 'VALIDATION_ERROR',
+            'error_code': 'USER_VALIDATION_ERROR',
             'message': 'username/email and password are required.'
         }), 400
 
@@ -81,7 +95,7 @@ def login_auth(login_data):
 
     if not user:
         return jsonify({
-            'error_code': 'UNAUTHORIZED',
+            'error_code': 'USER_UNAUTHORIZED',
             'message': 'Invalid username/email or password.'
         }), 401
 
@@ -97,13 +111,13 @@ def login_auth(login_data):
 
     if not is_password_correct:
         return jsonify({
-            'error_code': 'UNAUTHORIZED',
+            'error_code': 'USER_UNAUTHORIZED',
             'message': 'Invalid username/email or password.'
         }), 401
 
     if not user.is_active:
         return jsonify({
-            'error_code': 'FORBIDDEN',
+            'error_code': 'USER_FORBIDDEN',
             'message': 'Account is deactivated.'
         }), 403
 

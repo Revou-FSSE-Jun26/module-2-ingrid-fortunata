@@ -1,6 +1,7 @@
 from flask_smorest import Blueprint
 from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.order import Order, order_items
 from app.models.product import Product
@@ -24,7 +25,7 @@ def create_order(order_data):
 
     if not items:
         return jsonify({
-            "error_code": "VALIDATION_ERROR",
+            "error_code": "ORDER_VALIDATION_ERROR",
             "message": "Order must contain at least one item."
         }), 400
 
@@ -37,26 +38,26 @@ def create_order(order_data):
         qty = item.get('quantity')
         if qty is None or qty <= 0:
             return jsonify({
-                "error_code": "VALIDATION_ERROR",
+                "error_code": "ORDER_VALIDATION_ERROR",
                 "message": "Quantity cannot be null, zero, or negative."
             }), 400
 
         product = db.session.get(Product, prod_id)
         if not product or not product.is_active:
             return jsonify({
-                "error_code": "NOT_FOUND",
+                "error_code": "PRODUCT_NOT_FOUND",
                 "message": f"Product with ID {prod_id} not found."
             }), 404
 
         if product.price is None or float(product.price) <= 0:
             return jsonify({
-                "error_code": "VALIDATION_ERROR",
+                "error_code": "PRODUCT_PRICE_VALIDATION_ERROR",
                 "message": f"Price at purchase for product '{product.name}' cannot be null, zero, or negative."
             }), 400
 
         if product.stock is None or product.stock < qty:
             return jsonify({
-                "error_code": "BAD_REQUEST",
+                "error_code": "PRODUCT_STOCK_VALIDATION_ERROR",
                 "message": f"Insufficient stock for product '{product.name}'."
             }), 400
 
@@ -65,26 +66,34 @@ def create_order(order_data):
         total_amount += float(product.price) * qty
         product_updates.append((product, qty))
 
-    # Create order
-    new_order = Order(
-        user_id=user_id,
-        total_amount=total_amount,
-        status='pending'
-    )
-    db.session.add(new_order)
-    db.session.commit()
-
-    # Write order_items values
-    for product, qty in product_updates:
-        stmt = order_items.insert().values(
-            order_id=new_order.id,
-            product_id=product.id,
-            quantity=qty,
-            price_at_purchase=product.price
+    try:
+        # Create order
+        new_order = Order(
+            user_id=user_id,
+            total_amount=total_amount,
+            status='pending'
         )
-        db.session.execute(stmt)
+        db.session.add(new_order)
+        db.session.flush()  # Dapatkan new_order.id tanpa commit dulu
 
-    db.session.commit()
+        # Write order_items values
+        for product, qty in product_updates:
+            stmt = order_items.insert().values(
+                order_id=new_order.id,
+                product_id=product.id,
+                quantity=qty,
+                price_at_purchase=product.price
+            )
+            db.session.execute(stmt)
+
+        db.session.commit()  # 1 commit atomik untuk order + items + stock
+
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "ORDER_DATABASE_ERROR",
+            "message": "An error occurred while placing the order."
+        }), 500
 
     # Get detailed representation
     detailed_items = []
@@ -113,7 +122,7 @@ def get_orders():
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({
-            "error_code": "UNAUTHORIZED",
+            "error_code": "USER_NOT_FOUND",
             "message": "User not found."
         }), 401
 
@@ -135,7 +144,7 @@ def get_order_by_id(id):
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({
-            "error_code": "UNAUTHORIZED",
+            "error_code": "USER_NOT_FOUND",
             "message": "User not found."
         }), 401
 
@@ -143,7 +152,7 @@ def get_order_by_id(id):
     is_admin = user.role in ['superadmin', 'admin', 'seller']
     if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
-            "error_code": "NOT_FOUND",
+            "error_code": "ORDER_NOT_FOUND",
             "message": f"Order with ID {id} not found."
         }), 404
 
@@ -185,7 +194,7 @@ def delete_order(id):
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({
-            "error_code": "UNAUTHORIZED",
+            "error_code": "USER_NOT_FOUND",
             "message": "User not found."
         }), 401
 
@@ -193,15 +202,21 @@ def delete_order(id):
     is_admin = user.role in ['superadmin', 'admin', 'seller']
     if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
-            "error_code": "NOT_FOUND",
+            "error_code": "ORDER_NOT_FOUND",
             "message": f"Order with ID {id} not found."
         }), 404
 
-
-    # Delete order_items first due to RESTRICT constraint
-    db.session.execute(order_items.delete().where(order_items.c.order_id == id))
-    db.session.delete(order)
-    db.session.commit()
+    try:
+        # Delete order_items first due to RESTRICT constraint
+        db.session.execute(order_items.delete().where(order_items.c.order_id == id))
+        db.session.delete(order)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "ORDER_DATABASE_ERROR",
+            "message": "An error occurred while deleting the order."
+        }), 500
 
     return '', 204
 
