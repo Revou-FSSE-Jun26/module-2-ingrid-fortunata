@@ -180,7 +180,7 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 403)
         data = response.get_json()
-        self.assertEqual(data['error_code'], 'FORBIDDEN')
+        self.assertEqual(data['error_code'], 'USER_FORBIDDEN')
         self.assertEqual(data['message'], 'Account is deactivated.')
 
 if __name__ == '__main__':

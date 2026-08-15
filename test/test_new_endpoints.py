@@ -61,7 +61,7 @@ class NewEndpointsTestCase(unittest.TestCase):
         # Test delete blocked (linked to order seed data)
         res = self.client.delete('/products/1', headers=headers)  # Product ID 1 is linked to seeded orders
         self.assertEqual(res.status_code, 409)
-        self.assertEqual(res.get_json()['error_code'], 'CONFLICT')
+        self.assertEqual(res.get_json()['error_code'], 'PRODUCT_CONFLICT')
 
     def test_product_images_crud_and_validation(self):
         headers = self._get_admin_headers()
