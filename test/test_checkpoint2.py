@@ -39,7 +39,7 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- GET /products/999 (Not Found) Output ---")
         print(json.dumps(data, indent=2))
-        self.assertEqual(data['error_code'], 'NOT_FOUND')
+        self.assertEqual(data['error_code'], 'PRODUCT_NOT_FOUND')
 
     def test_04_post_user_register(self):
         """POST /users creating a User with db.session.add and db.session.commit"""
@@ -87,7 +87,7 @@ class Checkpoint2TestCase(unittest.TestCase):
         data = response.get_json()
         print("\n--- GET /users/9999 (Not Found) Output ---")
         print(json.dumps(data, indent=2))
-        self.assertEqual(data['error_code'], 'NOT_FOUND')
+        self.assertEqual(data['error_code'], 'USER_NOT_FOUND')
 
 if __name__ == '__main__':
     unittest.main()
