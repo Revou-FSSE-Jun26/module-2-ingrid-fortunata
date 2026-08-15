@@ -23,7 +23,7 @@ class Order(db.Model):
 
 
     # Many-to-Many relationship with Product
-    products = db.relationship('Product', secondary=order_items, backref=db.backref('orders', lazy='dynamic'))
+    products = db.relationship('Product', secondary=order_items, backref='orders', lazy=True)
 
     def to_dict(self):
         return {
