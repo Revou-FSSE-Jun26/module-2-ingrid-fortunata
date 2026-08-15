@@ -247,11 +247,12 @@ This checkpoint focuses on the initial PostgreSQL schema and seed data.
 
 ### Database Schema Overview
 
-The database consists of 5 tables:
+The database consists of 6 tables:
 
 - `users` — Stores user account records
 - `categories` — Product categories
 - `products` — Store items, linked to a category
+- `product_images` — Stores images for products
 - `orders` — Orders placed by a user
 - `order_items` — Junction table linking `orders` and `products` (many-to-many)
 
