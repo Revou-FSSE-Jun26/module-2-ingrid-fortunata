@@ -1,5 +1,5 @@
 from flask_smorest import Blueprint
-from flask import jsonify
+from flask import jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
@@ -117,7 +117,10 @@ def create_order(order_data):
 @jwt_required()
 @orders_bp.response(200, OrderListResponseSchema)
 def get_orders():
-    """List all orders. Admins/Sellers/Superadmins see all orders, customers see only their own."""
+    """List orders. Admins/Sellers/Superadmins see all orders, customers see only their own.
+    Supports optional pagination via ?page=&per_page= query params.
+    If no pagination params are provided, all matching orders are returned.
+    """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     if not user:
@@ -127,10 +130,28 @@ def get_orders():
         }), 401
 
     if user.role in ['superadmin', 'admin', 'seller']:
-        orders = Order.query.all()
+        query = Order.query
     else:
-        orders = Order.query.filter_by(user_id=user_id).all()
-        
+        query = Order.query.filter_by(user_id=user_id)
+
+    page = request.args.get('page', None, type=int)
+    per_page = request.args.get('per_page', None, type=int)
+
+    # Paginate only if at least one pagination param is explicitly provided
+    if page is not None or per_page is not None:
+        page = page or 1
+        per_page = per_page or 10
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        return jsonify({
+            "data": [o.to_dict() for o in pagination.items],
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+            "total": pagination.total,
+            "pages": pagination.pages
+        }), 200
+
+    # Default: fetch all
+    orders = query.all()
     return jsonify({
         "data": [o.to_dict() for o in orders]
     }), 200
