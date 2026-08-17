@@ -1,20 +1,23 @@
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/wGq_UtnU)
 
-# RevoShop API — Backend Development Project
+# RevoFashion API — Online Clothing Store Backend
 
 ## Overview
 
-**RevoShop** is a fictional e-commerce platform built as a backend API using **Flask** and **PostgreSQL**. It exposes a RESTful JSON API that handles user registration & authentication, product and category management, and order placement with stock control — mirroring the core backend of a real online shop.
+**RevoFashion** is a fashion-focused e-commerce backend API inspired by **Uniqlo**, built using **Flask** and **PostgreSQL**. It exposes a RESTful JSON API that handles user registration & authentication, fashion clothing product catalog with attributes (`size`, `color`, `material`, `gender`, `sku`), category management, query filtering, and order placement with variant tracking and stock control.
 
-The project is built progressively across bi-weekly checkpoints, with this repository currently covering **Checkpoint 1** (database design) and **Checkpoint 2** (Flask + SQLAlchemy layer with full API endpoints).
+The project is built progressively across bi-weekly checkpoints, covering **Checkpoint 1** (database design) and **Checkpoint 2** (Flask + SQLAlchemy layer with full API endpoints).
 
 ---
 
 ## Features Implemented
 
-- ✅ PostgreSQL schema with 5 tables and proper foreign key constraints
+- ✅ PostgreSQL schema with 6 tables (`users`, `categories`, `products`, `product_images`, `orders`, `order_items`) with proper foreign key constraints
+- ✅ Fashion-specific product attributes: `size` (XS–XXL, FREE), `color`, `material`, `gender` (Men, Women, Unisex, Kids), and unique `sku`
+- ✅ Query filtering on `GET /products` by `gender`, `size`, `color`, and `material`
+- ✅ Fashion order item variant tracking (`size` and `color` stored in `order_items` at purchase time)
 - ✅ Flask application factory pattern with environment-based configuration
-- ✅ SQLAlchemy ORM models for all entities (`User`, `Category`, `Product`, `Order`, `order_items`)
+- ✅ SQLAlchemy ORM models for all entities (`User`, `Category`, `Product`, `ProductImage`, `Order`, `order_items`)
 - ✅ Flask-Migrate (Alembic) for version-controlled schema migrations
 - ✅ Flask-JWT-Extended for stateless JWT authentication (tokens expire in 1 day)
 - ✅ Role-based access control (RBAC) via a custom `@roles_required` decorator
@@ -214,10 +217,10 @@ The `status` column on the `orders` table tracks the lifecycle of an order.
 
 | Method   | Endpoint         | Auth Required                   | Description                                    |
 | :------- | :--------------- | :------------------------------ | :--------------------------------------------- |
-| `GET`    | `/products`      | None                            | List all active products (with primary image)  |
-| `GET`    | `/products/<id>` | None                            | Get a single active product with all images    |
-| `POST`   | `/products`      | `superadmin`, `admin`, `seller` | Create a new product with optional images      |
-| `PUT`    | `/products/<id>` | `superadmin`, `admin`, `seller` | Update a product and replace its images        |
+| `GET`    | `/products`      | None                            | List active products (supports `?gender=`, `?size=`, `?color=`, `?material=`, `?page=`, `?per_page=`) |
+| `GET`    | `/products/<id>` | None                            | Get a single active product with all images and fashion attributes |
+| `POST`   | `/products`      | `superadmin`, `admin`, `seller` | Create a new clothing product with fashion attributes (`size`, `color`, `material`, `gender`, `sku`) and images |
+| `PUT`    | `/products/<id>` | `superadmin`, `admin`, `seller` | Update a product and replace its images/fashion attributes |
 | `DELETE` | `/products/<id>` | `superadmin`, `admin`, `seller` | Delete a product (blocked if linked to orders) |
 
 ### Categories
