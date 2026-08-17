@@ -1,5 +1,5 @@
 from flask_smorest import Blueprint
-from flask import jsonify
+from flask import jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.product import Product, ProductImage
@@ -18,7 +18,7 @@ products_bp = Blueprint('products', __name__, description='Operations on product
 @products_bp.route('/products', methods=['GET'])
 @products_bp.response(200, ProductListResponseSchema)
 def get_all_products():
-    """Returns the list of active products whose category is also active (or uncategorized) from the database."""
+    """Returns a paginated list of active products whose category is also active (or uncategorized) from the database."""
     # Subquery to select the base64 content of primary image
     primary_image_subquery = db.session.query(
         ProductImage.product_id,
@@ -27,7 +27,7 @@ def get_all_products():
         ProductImage.is_primary == True
     ).subquery()
 
-    # Query products joined with primary images
+    # Build query (without .all() so paginate() can be applied)
     products_query = db.session.query(
         Product,
         primary_image_subquery.c.image_base64.label('primary_image')
@@ -38,16 +38,25 @@ def get_all_products():
     ).filter(
         Product.is_active == True,
         (Category.id == None) | (Category.is_active == True)
-    ).all()
+    )
+
+    # Pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    pagination = products_query.paginate(page=page, per_page=per_page, error_out=False)
 
     data = []
-    for prod, primary_image in products_query:
+    for prod, primary_image in pagination.items:
         d = prod.to_dict()
         d['primary_image'] = primary_image
         data.append(d)
 
     return jsonify({
-        "data": data
+        "data": data,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "total": pagination.total,
+        "pages": pagination.pages
     }), 200
 
 @products_bp.route('/products/<int:id>', methods=['GET'])
