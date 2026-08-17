@@ -18,7 +18,9 @@ products_bp = Blueprint('products', __name__, description='Operations on product
 @products_bp.route('/products', methods=['GET'])
 @products_bp.response(200, ProductListResponseSchema)
 def get_all_products():
-    """Returns a paginated list of active products whose category is also active (or uncategorized) from the database."""
+    """Returns a paginated list of active products whose category is also active (or uncategorized) from the database.
+    Supports optional filters: ?gender=Women&size=M&color=Black
+    """
     # Subquery to select the base64 content of primary image
     primary_image_subquery = db.session.query(
         ProductImage.product_id,
@@ -39,6 +41,23 @@ def get_all_products():
         Product.is_active == True,
         (Category.id == None) | (Category.is_active == True)
     )
+
+    # Fashion-specific filters
+    gender = request.args.get('gender')
+    if gender:
+        products_query = products_query.filter(Product.gender == gender)
+
+    size = request.args.get('size')
+    if size:
+        products_query = products_query.filter(Product.size == size)
+
+    color = request.args.get('color')
+    if color:
+        products_query = products_query.filter(Product.color.ilike(f'%{color}%'))
+
+    material = request.args.get('material')
+    if material:
+        products_query = products_query.filter(Product.material.ilike(f'%{material}%'))
 
     # Pagination
     page = request.args.get('page', 1, type=int)

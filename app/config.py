@@ -19,7 +19,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # OpenAPI/Swagger UI configuration
-    API_TITLE = "RevoShop API"
+    API_TITLE = "RevoFashion API"
     API_VERSION = "v1"
     OPENAPI_VERSION = "3.0.3"
     OPENAPI_URL_PREFIX = "/"
