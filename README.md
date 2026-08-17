@@ -244,6 +244,44 @@ The `status` column on the `orders` table tracks the lifecycle of an order.
 
 ---
 
+### 📝 PUT Endpoint Convention: Full Object Replacement
+
+Following standard REST architectural constraints, the **`PUT`** HTTP method represents a **full replacement** of the target resource. When issuing a `PUT` request, the client should send the complete state of the object in the request body.
+
+#### Example 1: `PUT /products/<id>` (Full Body Payload)
+```json
+{
+  "category_id": 1,
+  "name": "AIRism Cotton Oversized Crew Neck T-Shirt",
+  "description": "Upgraded AIRism cotton blend with relaxed silhouette and moisture-wicking technology.",
+  "price": 19.90,
+  "stock": 150,
+  "size": "L",
+  "color": "Navy",
+  "material": "58% Cotton, 38% Polyester, 4% Spandex",
+  "gender": "Men",
+  "sku": "RF-TS-001-L",
+  "is_active": true,
+  "images": [
+    {
+      "image_base64": "data:image/jpeg;base64,...",
+      "is_primary": true
+    }
+  ]
+}
+```
+
+#### Example 2: `PUT /categories/<id>` (Full Body Payload)
+```json
+{
+  "name": "T-Shirts & Tops",
+  "description": "Everyday casual tees, graphic shirts, and tank tops.",
+  "is_active": true
+}
+```
+
+---
+
 ## Checkpoint 1: Database Design (Updated)
 
 This checkpoint focuses on the initial PostgreSQL schema and seed data.

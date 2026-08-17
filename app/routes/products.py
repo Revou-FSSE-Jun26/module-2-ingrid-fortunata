@@ -60,22 +60,38 @@ def get_all_products():
         products_query = products_query.filter(Product.material.ilike(f'%{material}%'))
 
     # Pagination
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    pagination = products_query.paginate(page=page, per_page=per_page, error_out=False)
+    page = request.args.get('page', None, type=int)
+    per_page = request.args.get('per_page', None, type=int)
 
+    if page is not None or per_page is not None:
+        page = page or 1
+        per_page = per_page or 10
+        pagination = products_query.paginate(page=page, per_page=per_page, error_out=False)
+
+        data = []
+        for prod, primary_image in pagination.items:
+            d = prod.to_dict()
+            d['primary_image'] = primary_image
+            data.append(d)
+
+        return jsonify({
+            "data": data,
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+            "total": pagination.total,
+            "pages": pagination.pages
+        }), 200
+
+    # Default: return all matching products
+    results = products_query.all()
     data = []
-    for prod, primary_image in pagination.items:
+    for prod, primary_image in results:
         d = prod.to_dict()
         d['primary_image'] = primary_image
         data.append(d)
 
     return jsonify({
-        "data": data,
-        "page": pagination.page,
-        "per_page": pagination.per_page,
-        "total": pagination.total,
-        "pages": pagination.pages
+        "data": data
     }), 200
 
 @products_bp.route('/products/<int:id>', methods=['GET'])
@@ -156,7 +172,9 @@ def create_product(product_data):
 @products_bp.arguments(ProductUpdateInputSchema, location='json')
 @products_bp.response(200, ProductDetailResponseSchema)
 def update_product(product_data, id):
-    """Update a product and its images."""
+    """Replace/update an entire product and its images.
+    Under RESTful PUT semantics, the client provides the full product representation to replace the existing resource.
+    """
     product = db.session.get(Product, id)
     if not product:
         return jsonify({
