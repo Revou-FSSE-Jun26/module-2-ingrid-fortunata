@@ -80,7 +80,9 @@ def get_category_by_id(id):
 @categories_bp.arguments(CategoryUpdateInputSchema, location='json')
 @categories_bp.response(200, CategoryGetResponseSchema)
 def update_category(category_data, id):
-    """Update a category."""
+    """Replace/update an entire category.
+    Under RESTful PUT semantics, the client provides the full category representation to replace the existing resource.
+    """
     category = db.session.get(Category, id)
     if not category:
         return jsonify({
