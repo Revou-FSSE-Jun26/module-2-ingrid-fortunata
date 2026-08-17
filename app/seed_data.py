@@ -9,95 +9,166 @@ from werkzeug.security import generate_password_hash
 def seed_database():
     app = create_app()
     with app.app_context():
-        print("Seeding sample data for Checkpoint 2...")
+        print("Seeding fashion store data for RevoFashion...")
 
-        # 1. Ensure Categories
-        cat_electronics = Category.query.filter_by(name='Electronics').first()
-        if not cat_electronics:
-            cat_electronics = Category(name='Electronics', description='Gadgets and tech devices', is_active=True)
-            db.session.add(cat_electronics)
+        # ─── 1. Categories (Uniqlo-inspired) ───
+        categories_data = [
+            ('T-Shirts', 'Casual and everyday t-shirts, crew necks, and graphic tees'),
+            ('Shirts & Blouses', 'Formal and casual shirts, oxford shirts, and blouses'),
+            ('Pants & Jeans', 'Bottoms including denim, chinos, and ankle pants'),
+            ('Outerwear', 'Jackets, coats, down jackets, and hoodies'),
+            ('Dresses & Skirts', 'Dresses, skirts, and jumpsuits for women'),
+            ('Activewear', 'Sportswear, dry-EX, and athleisure clothing'),
+            ('Innerwear & Loungewear', 'Underwear, socks, heattech, and home wear'),
+        ]
 
-        cat_apparel = Category.query.filter_by(name='Apparel').first()
-        if not cat_apparel:
-            cat_apparel = Category(name='Apparel', description='Clothing and fashion items', is_active=True)
-            db.session.add(cat_apparel)
+        cats = {}
+        for name, desc in categories_data:
+            cat = Category.query.filter_by(name=name).first()
+            if not cat:
+                cat = Category(name=name, description=desc, is_active=True)
+                db.session.add(cat)
+            cats[name] = cat
 
-        cat_inactive = Category.query.filter_by(name='Inactive Category').first()
+        # Add one inactive category for testing
+        cat_inactive = Category.query.filter_by(name='Discontinued Collection').first()
         if not cat_inactive:
-            cat_inactive = Category(name='Inactive Category', description='Deactivated category', is_active=False)
+            cat_inactive = Category(name='Discontinued Collection', description='Past season items no longer sold', is_active=False)
             db.session.add(cat_inactive)
 
         db.session.commit()
 
-        # 2. Ensure Products
-        p1 = Product.query.filter_by(name='Wireless Noise-Canceling Headphones').first()
-        if not p1:
-            p1 = Product(
-                category_id=cat_electronics.id,
-                name='Wireless Noise-Canceling Headphones',
-                description='High-fidelity Bluetooth headphones',
-                price=199.99,
-                stock=45,
-                is_active=True
-            )
-            db.session.add(p1)
+        # ─── 2. Products (Uniqlo-inspired clothing items) ───
+        products_data = [
+            # T-Shirts
+            {
+                'category': 'T-Shirts', 'name': 'AIRism Cotton Crew Neck T-Shirt',
+                'description': 'Smooth AIRism cotton blend with quick-dry and anti-odor technology. Perfect for everyday layering.',
+                'price': 14.90, 'stock': 200, 'size': 'M', 'color': 'White',
+                'material': '58% Cotton, 38% Polyester, 4% Spandex', 'gender': 'Men', 'sku': 'RF-TS-001'
+            },
+            {
+                'category': 'T-Shirts', 'name': 'Supima Cotton Crew Neck T-Shirt',
+                'description': 'Premium Supima cotton with a luxuriously soft feel. Minimal and timeless design.',
+                'price': 19.90, 'stock': 150, 'size': 'L', 'color': 'Navy',
+                'material': '100% Supima Cotton', 'gender': 'Men', 'sku': 'RF-TS-002'
+            },
+            {
+                'category': 'T-Shirts', 'name': 'Oversized Cropped T-Shirt',
+                'description': 'Relaxed oversized fit with a slightly cropped length. Soft washed cotton.',
+                'price': 19.90, 'stock': 120, 'size': 'S', 'color': 'Black',
+                'material': '100% Cotton', 'gender': 'Women', 'sku': 'RF-TS-003'
+            },
+            # Shirts & Blouses
+            {
+                'category': 'Shirts & Blouses', 'name': 'Oxford Slim-Fit Long Sleeve Shirt',
+                'description': 'Classic button-down oxford shirt with a modern slim fit. Wrinkle-resistant fabric.',
+                'price': 29.90, 'stock': 80, 'size': 'M', 'color': 'Light Blue',
+                'material': '100% Cotton', 'gender': 'Men', 'sku': 'RF-SH-001'
+            },
+            {
+                'category': 'Shirts & Blouses', 'name': 'Rayon Long Sleeve Blouse',
+                'description': 'Elegant drape with a smooth rayon finish. Features a relaxed silhouette.',
+                'price': 29.90, 'stock': 90, 'size': 'M', 'color': 'Off White',
+                'material': '100% Rayon', 'gender': 'Women', 'sku': 'RF-SH-002'
+            },
+            # Pants & Jeans
+            {
+                'category': 'Pants & Jeans', 'name': 'EZY Ankle Pants',
+                'description': 'Incredibly comfortable ankle-length pants with elastic waist. Looks dressy, feels like sweats.',
+                'price': 39.90, 'stock': 100, 'size': 'L', 'color': 'Dark Gray',
+                'material': '68% Polyester, 28% Rayon, 4% Spandex', 'gender': 'Men', 'sku': 'RF-PT-001'
+            },
+            {
+                'category': 'Pants & Jeans', 'name': 'Ultra Stretch High-Rise Jeans',
+                'description': 'High-rise skinny jeans with ultra stretch denim for maximum comfort and mobility.',
+                'price': 49.90, 'stock': 70, 'size': 'S', 'color': 'Blue',
+                'material': '86% Cotton, 12% Polyester, 2% Spandex', 'gender': 'Women', 'sku': 'RF-PT-002'
+            },
+            # Outerwear
+            {
+                'category': 'Outerwear', 'name': 'Ultra Light Down Jacket',
+                'description': 'Incredibly lightweight and warm premium down jacket. Packs into its own pouch for easy carrying.',
+                'price': 79.90, 'stock': 50, 'size': 'M', 'color': 'Olive',
+                'material': '100% Nylon (Shell), 90% Down 10% Feather (Fill)', 'gender': 'Unisex', 'sku': 'RF-OW-001'
+            },
+            {
+                'category': 'Outerwear', 'name': 'Pocketable UV Protection Parka',
+                'description': 'Lightweight parka with UPF 50+ sun protection. Folds into a compact pouch.',
+                'price': 49.90, 'stock': 60, 'size': 'M', 'color': 'Beige',
+                'material': '100% Polyester', 'gender': 'Women', 'sku': 'RF-OW-002'
+            },
+            {
+                'category': 'Outerwear', 'name': 'Dry Stretch Full-Zip Hoodie',
+                'description': 'Quick-drying hoodie with 4-way stretch fabric. Great for workouts or casual wear.',
+                'price': 39.90, 'stock': 85, 'size': 'L', 'color': 'Black',
+                'material': '88% Polyester, 12% Spandex', 'gender': 'Men', 'sku': 'RF-OW-003'
+            },
+            # Dresses & Skirts
+            {
+                'category': 'Dresses & Skirts', 'name': 'Mercerized Cotton A-Line Dress',
+                'description': 'Elegant A-line dress with a subtle sheen from mercerized cotton treatment.',
+                'price': 39.90, 'stock': 40, 'size': 'M', 'color': 'Dark Green',
+                'material': '100% Cotton', 'gender': 'Women', 'sku': 'RF-DR-001'
+            },
+            # Activewear
+            {
+                'category': 'Activewear', 'name': 'DRY-EX Crew Neck T-Shirt',
+                'description': 'Ultra-fast drying performance tee with mesh ventilation panels.',
+                'price': 19.90, 'stock': 180, 'size': 'M', 'color': 'Red',
+                'material': '100% Polyester', 'gender': 'Unisex', 'sku': 'RF-AW-001'
+            },
+            {
+                'category': 'Activewear', 'name': 'Ultra Stretch Active Jogger Pants',
+                'description': 'Flexible jogger pants with 4-way stretch. Tapered leg with zippered cuffs.',
+                'price': 39.90, 'stock': 75, 'size': 'M', 'color': 'Navy',
+                'material': '85% Nylon, 15% Spandex', 'gender': 'Men', 'sku': 'RF-AW-002'
+            },
+            # Innerwear & Loungewear
+            {
+                'category': 'Innerwear & Loungewear', 'name': 'HEATTECH Crew Neck Long Sleeve T-Shirt',
+                'description': 'Bio-warming technology that converts body moisture into heat. Essential for cold weather layering.',
+                'price': 14.90, 'stock': 300, 'size': 'M', 'color': 'Black',
+                'material': '43% Polyester, 35% Acrylic, 15% Rayon, 7% Spandex', 'gender': 'Unisex', 'sku': 'RF-IW-001'
+            },
+            {
+                'category': 'Innerwear & Loungewear', 'name': 'AIRism Cotton Ribbed Tank Top',
+                'description': 'Comfortable ribbed tank top with AIRism technology for breathability.',
+                'price': 12.90, 'stock': 160, 'size': 'S', 'color': 'White',
+                'material': '62% Cotton, 33% Polyester, 5% Spandex', 'gender': 'Women', 'sku': 'RF-IW-002'
+            },
+        ]
 
-        p2 = Product.query.filter_by(name='Ergonomic Mechanical Keyboard').first()
-        if not p2:
-            p2 = Product(
-                category_id=cat_electronics.id,
-                name='Ergonomic Mechanical Keyboard',
-                description='Custom RGB mechanical keyboard',
-                price=129.50,
-                stock=30,
-                is_active=True
-            )
-            db.session.add(p2)
+        # Inactive product for testing
+        products_data.append({
+            'category': 'Discontinued Collection', 'name': 'Vintage Flannel Shirt (Discontinued)',
+            'description': 'Past season flannel shirt — no longer in production.',
+            'price': 34.90, 'stock': 3, 'size': 'L', 'color': 'Red Plaid',
+            'material': '100% Cotton Flannel', 'gender': 'Men', 'sku': 'RF-DC-001',
+            'is_active': False
+        })
 
-        p3 = Product.query.filter_by(name='Organic Cotton Hoodie').first()
-        if not p3:
-            p3 = Product(
-                category_id=cat_apparel.id,
-                name='Organic Cotton Hoodie',
-                description='Premium organic cotton pullover hoodie',
-                price=59.99,
-                stock=100,
-                is_active=True
-            )
-            db.session.add(p3)
-
-        p_inactive = Product.query.filter_by(name='Deactivated Phone').first()
-        if not p_inactive:
-            p_inactive = Product(
-                category_id=cat_electronics.id,
-                name='Deactivated Phone',
-                description='Old deactivated smartphone model',
-                price=499.99,
-                stock=5,
-                is_active=False
-            )
-            db.session.add(p_inactive)
-
-        p_in_inactive_cat = Product.query.filter_by(name='Product in Inactive Category').first()
-        if not p_in_inactive_cat:
-            p_in_inactive_cat = Product(
-                category_id=cat_inactive.id,
-                name='Product in Inactive Category',
-                description='Product whose category is deactivated',
-                price=10.00,
-                stock=10,
-                is_active=True
-            )
-            db.session.add(p_in_inactive_cat)
+        prods = {}
+        for pd in products_data:
+            existing = Product.query.filter_by(sku=pd['sku']).first()
+            if not existing:
+                cat_name = pd.pop('category')
+                cat_obj = cats.get(cat_name, cat_inactive)
+                new_prod = Product(category_id=cat_obj.id, **pd)
+                db.session.add(new_prod)
+                prods[pd['sku']] = new_prod
+            else:
+                prods[pd['sku']] = existing
+                pd.pop('category', None)  # remove to avoid key error
 
         db.session.commit()
 
-        # 3. Ensure Users — passwords are stored as real bcrypt/pbkdf2 hashes
+        # ─── 3. Users ───
         superadmin = User.query.filter_by(username='superadmin_user').first()
         if not superadmin:
             superadmin = User(
                 username='superadmin_user',
-                email='superadmin@example.com',
+                email='superadmin@revofashion.com',
                 password_hash=generate_password_hash('superadmin_password'),
                 role='superadmin',
                 is_active=True
@@ -108,7 +179,7 @@ def seed_database():
         if not admin:
             admin = User(
                 username='admin_user',
-                email='admin@example.com',
+                email='admin@revofashion.com',
                 password_hash=generate_password_hash('admin_password'),
                 role='admin',
                 is_active=True
@@ -119,7 +190,7 @@ def seed_database():
         if not seller:
             seller = User(
                 username='seller_user',
-                email='seller@example.com',
+                email='seller@revofashion.com',
                 password_hash=generate_password_hash('seller_password'),
                 role='seller',
                 is_active=True
@@ -150,36 +221,44 @@ def seed_database():
 
         db.session.commit()
 
-        # 4. Ensure Order linked to multiple products (Many-to-Many via order_items)
+        # ─── 4. Orders (Fashion purchases with size/color) ───
         existing_order = Order.query.filter_by(user_id=alice.id).first()
         if not existing_order:
-            new_order = Order(
-                user_id=alice.id,
-                total_amount=329.49,
-                status='pending'
-            )
-            db.session.add(new_order)
-            db.session.commit()
+            # Order 1: Alice buys AIRism T-Shirt + EZY Ankle Pants
+            p_airism = prods.get('RF-TS-001')
+            p_ezy = prods.get('RF-PT-001')
 
-            # Insert order_items (1 order linked to multiple products: p1 and p2)
-            stmt1 = order_items.insert().values(
-                order_id=new_order.id,
-                product_id=p1.id,
-                quantity=1,
-                price_at_purchase=199.99
-            )
-            stmt2 = order_items.insert().values(
-                order_id=new_order.id,
-                product_id=p2.id,
-                quantity=1,
-                price_at_purchase=129.50
-            )
-            db.session.execute(stmt1)
-            db.session.execute(stmt2)
-            db.session.commit()
-            print(f"Created Order ID #{new_order.id} for User '{alice.username}' linked to Products #{p1.id} and #{p2.id}.")
+            if p_airism and p_ezy:
+                new_order = Order(
+                    user_id=alice.id,
+                    total_amount=float(p_airism.price) + float(p_ezy.price),
+                    status='pending'
+                )
+                db.session.add(new_order)
+                db.session.commit()
 
-        print("Seeding completed successfully!")
+                stmt1 = order_items.insert().values(
+                    order_id=new_order.id,
+                    product_id=p_airism.id,
+                    quantity=1,
+                    price_at_purchase=p_airism.price,
+                    size='M',
+                    color='White'
+                )
+                stmt2 = order_items.insert().values(
+                    order_id=new_order.id,
+                    product_id=p_ezy.id,
+                    quantity=1,
+                    price_at_purchase=p_ezy.price,
+                    size='L',
+                    color='Dark Gray'
+                )
+                db.session.execute(stmt1)
+                db.session.execute(stmt2)
+                db.session.commit()
+                print(f"Created Order ID #{new_order.id} for User '{alice.username}' — AIRism T-Shirt (M/White) + EZY Ankle Pants (L/Dark Gray)")
+
+        print("Fashion store seeding completed successfully! 🧥👗👖")
 
 if __name__ == '__main__':
     seed_database()

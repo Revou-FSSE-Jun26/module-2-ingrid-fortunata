@@ -15,7 +15,7 @@ class SwaggerTestCase(unittest.TestCase):
         response = self.client.get('/openapi.json')
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertEqual(data['info']['title'], "RevoShop API")
+        self.assertEqual(data['info']['title'], "RevoFashion API")
         self.assertEqual(data['openapi'], "3.0.3")
         self.assertIn('/users', data['paths'])
         self.assertIn('/products', data['paths'])

@@ -3,6 +3,8 @@ from marshmallow import Schema, fields, validates, ValidationError
 class OrderItemInputSchema(Schema):
     product_id = fields.Int(required=True)
     quantity = fields.Int(required=True)
+    size = fields.Str(allow_none=True)
+    color = fields.Str(allow_none=True)
 
     @validates("quantity")
     def validate_quantity(self, value, **kwargs):
@@ -31,6 +33,8 @@ class OrderDetailItemSchema(Schema):
     description = fields.Str(allow_none=True)
     quantity = fields.Int()
     price_at_purchase = fields.Float()
+    size = fields.Str(allow_none=True)
+    color = fields.Str(allow_none=True)
 
 class OrderDetailSchema(OrderResponseSchema):
     items = fields.List(fields.Nested(OrderDetailItemSchema), dump_only=True)

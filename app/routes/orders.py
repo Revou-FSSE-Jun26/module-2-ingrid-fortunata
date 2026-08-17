@@ -36,6 +36,9 @@ def create_order(order_data):
     for item in items:
         prod_id = item.get('product_id')
         qty = item.get('quantity')
+        item_size = item.get('size')
+        item_color = item.get('color')
+
         if qty is None or qty <= 0:
             return jsonify({
                 "error_code": "ORDER_VALIDATION_ERROR",
@@ -64,7 +67,7 @@ def create_order(order_data):
         # Decrement stock
         product.stock -= qty
         total_amount += float(product.price) * qty
-        product_updates.append((product, qty))
+        product_updates.append((product, qty, item_size, item_color))
 
     try:
         # Create order
@@ -77,12 +80,14 @@ def create_order(order_data):
         db.session.flush()  # Dapatkan new_order.id tanpa commit dulu
 
         # Write order_items values
-        for product, qty in product_updates:
+        for product, qty, item_size, item_color in product_updates:
             stmt = order_items.insert().values(
                 order_id=new_order.id,
                 product_id=product.id,
                 quantity=qty,
-                price_at_purchase=product.price
+                price_at_purchase=product.price,
+                size=item_size,
+                color=item_color
             )
             db.session.execute(stmt)
 
@@ -97,13 +102,15 @@ def create_order(order_data):
 
     # Get detailed representation
     detailed_items = []
-    for product, qty in product_updates:
+    for product, qty, item_size, item_color in product_updates:
         detailed_items.append({
             "product_id": product.id,
             "name": product.name,
             "description": product.description,
             "quantity": qty,
-            "price_at_purchase": float(product.price)
+            "price_at_purchase": float(product.price),
+            "size": item_size,
+            "color": item_color
         })
 
     order_payload = new_order.to_dict()
@@ -182,6 +189,8 @@ def get_order_by_id(id):
         order_items.c.product_id,
         order_items.c.quantity,
         order_items.c.price_at_purchase,
+        order_items.c.size,
+        order_items.c.color,
         Product.name,
         Product.description
     ).join(
@@ -197,7 +206,9 @@ def get_order_by_id(id):
             "name": row.name,
             "description": row.description,
             "quantity": row.quantity,
-            "price_at_purchase": float(row.price_at_purchase)
+            "price_at_purchase": float(row.price_at_purchase),
+            "size": row.size,
+            "color": row.color
         })
 
     order_payload = order.to_dict()
@@ -240,4 +251,3 @@ def delete_order(id):
         }), 500
 
     return '', 204
-

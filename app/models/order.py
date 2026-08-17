@@ -8,7 +8,9 @@ order_items = db.Table(
     db.Column('order_id', db.Integer, db.ForeignKey('orders.id', ondelete='RESTRICT'), primary_key=True),
     db.Column('product_id', db.Integer, db.ForeignKey('products.id', ondelete='RESTRICT'), primary_key=True),
     db.Column('quantity', db.Integer, nullable=False, default=1),
-    db.Column('price_at_purchase', db.Numeric(10, 2), nullable=False)
+    db.Column('price_at_purchase', db.Numeric(10, 2), nullable=False),
+    db.Column('size', db.String(20), nullable=True),
+    db.Column('color', db.String(50), nullable=True)
 )
 
 class Order(db.Model):

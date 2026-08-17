@@ -30,7 +30,7 @@ def create_app(config_class=Config):
     @flask_app.route('/')
     def index():
         return {
-            "name": "RevoShop API",
+            "name": "RevoFashion API",
             "version": "1.0",
             "checkpoint": 2,
             "status": "online"

@@ -1,4 +1,7 @@
-from marshmallow import Schema, fields, validates, ValidationError, validates_schema
+from marshmallow import Schema, fields, validates, ValidationError, validates_schema, validate
+
+VALID_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "FREE"]
+VALID_GENDERS = ["Men", "Women", "Unisex", "Kids"]
 
 class ProductImageSchema(Schema):
     id = fields.Int(dump_only=True)
@@ -23,6 +26,11 @@ class ProductSchema(Schema):
     description = fields.Str(allow_none=True)
     price = fields.Float(required=True)
     stock = fields.Int(required=True)
+    size = fields.Str(allow_none=True)
+    color = fields.Str(allow_none=True)
+    material = fields.Str(allow_none=True)
+    gender = fields.Str(allow_none=True)
+    sku = fields.Str(allow_none=True)
     is_active = fields.Bool()
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
@@ -33,6 +41,11 @@ class ProductCreateInputSchema(Schema):
     description = fields.Str(allow_none=True)
     price = fields.Float(required=True)
     stock = fields.Int(required=True)
+    size = fields.Str(allow_none=True, validate=validate.OneOf(VALID_SIZES))
+    color = fields.Str(allow_none=True)
+    material = fields.Str(allow_none=True)
+    gender = fields.Str(allow_none=True, validate=validate.OneOf(VALID_GENDERS))
+    sku = fields.Str(allow_none=True)
     is_active = fields.Bool(load_default=True)
     images = fields.List(fields.Nested(ProductImageInputSchema), load_default=list)
 
@@ -63,6 +76,11 @@ class ProductUpdateInputSchema(Schema):
     description = fields.Str(allow_none=True)
     price = fields.Float()
     stock = fields.Int()
+    size = fields.Str(allow_none=True, validate=validate.OneOf(VALID_SIZES))
+    color = fields.Str(allow_none=True)
+    material = fields.Str(allow_none=True)
+    gender = fields.Str(allow_none=True, validate=validate.OneOf(VALID_GENDERS))
+    sku = fields.Str(allow_none=True)
     is_active = fields.Bool()
     images = fields.List(fields.Nested(ProductImageInputSchema))
 
