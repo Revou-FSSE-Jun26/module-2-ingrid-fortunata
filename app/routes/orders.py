@@ -157,6 +157,14 @@ def get_orders():
     else:
         query = Order.query.filter_by(user_id=user_id)
 
+    # Optional status filter
+    status = request.args.get('status')
+    if status:
+        query = query.filter(Order.status == status.strip().lower())
+
+    # Order newest first
+    query = query.order_by(Order.created_at.desc(), Order.id.desc())
+
     page, per_page = _safe_page_params()
 
     if page is not None:
