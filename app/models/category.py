@@ -14,6 +14,13 @@ class Category(db.Model):
     # Relationship to Product
     products = db.relationship('Product', backref='category', lazy=True)
 
+    def to_with_products_dict(self, is_admin: bool = False) -> dict:
+        """Returns category dictionary including its products (filtered by active status for non-admins)."""
+        d = self.to_dict()
+        products = self.products if is_admin else [p for p in self.products if p.is_active]
+        d['products'] = [p.to_dict() for p in products]
+        return d
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -22,3 +29,4 @@ class Category(db.Model):
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+

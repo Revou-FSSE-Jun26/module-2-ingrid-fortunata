@@ -4,8 +4,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.user import User
-from app.auth import roles_required
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required
+from app.auth import roles_required, get_current_user
 from app.schemas import (
     UserRegisterInputSchema,
     UserRegisterResponseSchema,
@@ -87,11 +87,9 @@ def get_all_users():
         search_term = f"%{search.strip()}%"
         query = query.filter(User.username.ilike(search_term) | User.email.ilike(search_term))
 
-    raw_page = request.args.get('page', None, type=int)
-    raw_per_page = request.args.get('per_page', None, type=int)
-
-    page = max(1, raw_page) if raw_page is not None else 1
-    per_page = min(100, max(1, raw_per_page)) if raw_per_page is not None else 10
+    page, per_page = get_page_params()
+    page = page or 1
+    per_page = per_page or 10
 
     offset = (page - 1) * per_page
     users = query.offset(offset).limit(per_page).all()
@@ -109,13 +107,12 @@ def get_user_by_id(id):
     Customers can only view their own profile.
     Admins and superadmins can view any user.
     """
-    requester_id = int(get_jwt_identity())
-    requester = db.session.get(User, requester_id)
+    requester = get_current_user()
     if not requester:
         return unauthorized_response('Authenticated user not found.')
 
     is_admin = requester.role in ['superadmin', 'admin']
-    if not is_admin and requester_id != id:
+    if not is_admin and requester.id != id:
         return forbidden_response('You do not have permission to view this profile.', error_code='USER_FORBIDDEN')
 
     user = db.session.get(User, id)
@@ -136,8 +133,7 @@ def update_user_by_id(user_data, id):
     Customers can update only their own username and email.
     Superadmins can update any user's profile, including role and is_active.
     """
-    requester_id = int(get_jwt_identity())
-    requester = db.session.get(User, requester_id)
+    requester = get_current_user()
     if not requester:
         return unauthorized_response('Authenticated user not found.')
 

@@ -32,6 +32,37 @@ class Order(db.Model):
     # Many-to-Many relationship with Product
     products = db.relationship('Product', secondary=order_items, backref='orders', lazy=True)
 
+    def to_detail_dict(self) -> dict:
+        """Returns full order dictionary including all line items and product metadata."""
+        from app.models.product import Product
+        items_query = db.session.query(
+            order_items.c.product_id,
+            order_items.c.quantity,
+            order_items.c.price_at_purchase,
+            order_items.c.size,
+            order_items.c.color,
+            Product.name,
+            Product.description
+        ).join(
+            Product, order_items.c.product_id == Product.id
+        ).filter(
+            order_items.c.order_id == self.id
+        ).all()
+
+        detailed_items = [{
+            "product_id": row.product_id,
+            "name": row.name,
+            "description": row.description,
+            "quantity": row.quantity,
+            "price_at_purchase": float(row.price_at_purchase),
+            "size": row.size,
+            "color": row.color
+        } for row in items_query]
+
+        order_payload = self.to_dict()
+        order_payload['items'] = detailed_items
+        return order_payload
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -46,3 +77,4 @@ class Order(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
