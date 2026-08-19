@@ -53,3 +53,16 @@ def superadmin_headers(client):
     token = data['data']['token']
     return {"Authorization": f"Bearer {token}"}
 
+
+@pytest.fixture(autouse=True)
+def reset_test_stocks(app):
+    """Ensure seeded products maintain healthy stock level for order test runs."""
+    yield
+    with app.app_context():
+        from app.models.product import Product
+        p = db.session.get(Product, 1)
+        if p and p.stock < 10:
+            p.stock = 50
+            db.session.commit()
+
+

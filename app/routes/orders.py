@@ -1,17 +1,15 @@
-from decimal import Decimal, ROUND_HALF_UP
 from flask_smorest import Blueprint
 from flask import jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.order import Order, order_items
 from app.models.product import Product
 from app.models.user import User
+from app.auth import get_current_user
 from app.errors import (
     error_response,
     not_found_response,
-    conflict_response,
-    forbidden_response,
     unauthorized_response,
 )
 from app.validators import (
@@ -30,35 +28,61 @@ from app.utils.pagination import get_page_params
 orders_bp = Blueprint('orders', __name__, description='Operations on orders')
 
 
-def get_order_detailed_payload(order: Order) -> dict:
-    """Builds full JSON-serializable dictionary for an order with all its items and product metadata."""
-    items_query = db.session.query(
-        order_items.c.product_id,
-        order_items.c.quantity,
-        order_items.c.price_at_purchase,
-        order_items.c.size,
-        order_items.c.color,
-        Product.name,
-        Product.description
-    ).join(
-        Product, order_items.c.product_id == Product.id
-    ).filter(
-        order_items.c.order_id == order.id
-    ).all()
+def build_filtered_orders_query(user: User, args: dict):
+    """Builds and applies role-based access and search/filter criteria on orders."""
+    is_admin = user.role in ['superadmin', 'admin']
+    query = Order.query if is_admin else Order.query.filter_by(user_id=user.id)
 
-    detailed_items = [{
-        "product_id": row.product_id,
-        "name": row.name,
-        "description": row.description,
-        "quantity": row.quantity,
-        "price_at_purchase": float(row.price_at_purchase),
-        "size": row.size,
-        "color": row.color
-    } for row in items_query]
+    # Optional status filter
+    status = args.get('status')
+    if status:
+        query = query.filter(Order.status == status.strip().lower())
 
-    order_payload = order.to_dict()
-    order_payload['items'] = detailed_items
-    return order_payload
+    # Categorized order tracking filters
+    order_id = args.get('order_id', None, type=int)
+    if order_id is not None:
+        query = query.filter(Order.id == order_id)
+
+    recipient_name = args.get('recipient_name')
+    if recipient_name:
+        query = query.filter(Order.recipient_name.ilike(f'%{recipient_name.strip()}%'))
+
+    recipient_phone = args.get('recipient_phone')
+    if recipient_phone:
+        query = query.filter(Order.recipient_phone.ilike(f'%{recipient_phone.strip()}%'))
+
+    shipping_address = args.get('shipping_address')
+    if shipping_address:
+        query = query.filter(Order.shipping_address.ilike(f'%{shipping_address.strip()}%'))
+
+    customer_name = args.get('customer_name') or args.get('username')
+    if customer_name and is_admin:
+        query = query.join(User, Order.user_id == User.id).filter(
+            db.or_(
+                User.username.ilike(f'%{customer_name.strip()}%'),
+                User.email.ilike(f'%{customer_name.strip()}%')
+            )
+        )
+
+    # General search across all fields
+    search = args.get('search')
+    if search:
+        search_term = f'%{search.strip()}%'
+        search_filters = [
+            Order.recipient_name.ilike(search_term),
+            Order.recipient_phone.ilike(search_term),
+            Order.shipping_address.ilike(search_term),
+            db.cast(Order.id, db.String).ilike(search_term)
+        ]
+        if is_admin:
+            query = query.join(User, Order.user_id == User.id)
+            search_filters.extend([
+                User.username.ilike(search_term),
+                User.email.ilike(search_term)
+            ])
+        query = query.filter(db.or_(*search_filters))
+
+    return query.order_by(Order.created_at.desc(), Order.id.desc())
 
 
 @orders_bp.route('/orders', methods=['POST'])
@@ -67,16 +91,18 @@ def get_order_detailed_payload(order: Order) -> dict:
 @orders_bp.response(201, OrderResponseWrapperSchema)
 def create_order(order_data):
     """Place a new order linked to the logged-in user."""
-    user_id = int(get_jwt_identity())
+    user = get_current_user()
+    if not user:
+        return unauthorized_response("Authenticated user not found.")
+
     items = order_data.get('items', [])
-    # Validate all items with row-level lock before touching the DB
     product_updates, total_amount, err = validate_and_lock_order_items(items)
     if err:
         return err
 
     try:
         new_order = Order(
-            user_id=user_id,
+            user_id=user.id,
             total_amount=float(total_amount),
             status='pending',
             shipping_address=order_data.get('shipping_address'),
@@ -84,7 +110,7 @@ def create_order(order_data):
             recipient_phone=order_data.get('recipient_phone')
         )
         db.session.add(new_order)
-        db.session.flush()  # get new_order.id before commit
+        db.session.flush()
 
         for product, qty, item_size, item_color in product_updates:
             stmt = order_items.insert().values(
@@ -97,13 +123,13 @@ def create_order(order_data):
             )
             db.session.execute(stmt)
 
-        db.session.commit()  # single atomic commit for order + items + stock
+        db.session.commit()
 
     except SQLAlchemyError:
         db.session.rollback()
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while placing the order.", 500)
 
-    return jsonify({"data": get_order_detailed_payload(new_order)}), 201
+    return jsonify({"data": new_order.to_detail_dict()}), 201
 
 
 @orders_bp.route('/orders', methods=['GET'])
@@ -114,68 +140,11 @@ def get_orders():
     Admins/Superadmins see all orders; customers see only their own.
     Supports optional pagination via ?page=&per_page= (max per_page=100).
     """
-    user_id = int(get_jwt_identity())
-    user = db.session.get(User, user_id)
+    user = get_current_user()
     if not user:
         return unauthorized_response("Authenticated user not found.")
 
-    if user.role in ['superadmin', 'admin']:
-        query = Order.query
-    else:
-        query = Order.query.filter_by(user_id=user_id)
-
-    # Optional status filter
-    status = request.args.get('status')
-    if status:
-        query = query.filter(Order.status == status.strip().lower())
-
-    # Categorized order tracking filters
-    order_id = request.args.get('order_id', None, type=int)
-    if order_id is not None:
-        query = query.filter(Order.id == order_id)
-
-    recipient_name = request.args.get('recipient_name')
-    if recipient_name:
-        query = query.filter(Order.recipient_name.ilike(f'%{recipient_name.strip()}%'))
-
-    recipient_phone = request.args.get('recipient_phone')
-    if recipient_phone:
-        query = query.filter(Order.recipient_phone.ilike(f'%{recipient_phone.strip()}%'))
-
-    shipping_address = request.args.get('shipping_address')
-    if shipping_address:
-        query = query.filter(Order.shipping_address.ilike(f'%{shipping_address.strip()}%'))
-
-    customer_name = request.args.get('customer_name') or request.args.get('username')
-    if customer_name and user.role in ['superadmin', 'admin']:
-        query = query.join(User, Order.user_id == User.id).filter(
-            db.or_(
-                User.username.ilike(f'%{customer_name.strip()}%'),
-                User.email.ilike(f'%{customer_name.strip()}%')
-            )
-        )
-
-    # General search across all fields (ID, recipient, phone, address, username, email)
-    search = request.args.get('search')
-    if search:
-        search_term = f'%{search.strip()}%'
-        search_filters = [
-            Order.recipient_name.ilike(search_term),
-            Order.recipient_phone.ilike(search_term),
-            Order.shipping_address.ilike(search_term),
-            db.cast(Order.id, db.String).ilike(search_term)
-        ]
-        if user.role in ['superadmin', 'admin']:
-            query = query.join(User, Order.user_id == User.id)
-            search_filters.extend([
-                User.username.ilike(search_term),
-                User.email.ilike(search_term)
-            ])
-        query = query.filter(db.or_(*search_filters))
-
-    # Order newest first (fixed)
-    query = query.order_by(Order.created_at.desc(), Order.id.desc())
-
+    query = build_filtered_orders_query(user, request.args)
     page, per_page = get_page_params()
 
     if page is not None:
@@ -188,7 +157,6 @@ def get_orders():
             "pages": pagination.pages
         }), 200
 
-    # Default: fetch all
     orders = query.all()
     return jsonify({
         "data": [o.to_dict() for o in orders]
@@ -200,17 +168,16 @@ def get_orders():
 @orders_bp.response(200, OrderResponseWrapperSchema)
 def get_order_by_id(id):
     """View a specific order. Admins/Superadmins can view any order; customers only their own."""
-    user_id = int(get_jwt_identity())
-    user = db.session.get(User, user_id)
+    user = get_current_user()
     if not user:
         return unauthorized_response("Authenticated user not found.")
 
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
-    if not order or (not is_admin and order.user_id != user_id):
+    if not order or (not is_admin and order.user_id != user.id):
         return not_found_response("Order", id)
 
-    return jsonify({"data": get_order_detailed_payload(order)}), 200
+    return jsonify({"data": order.to_detail_dict()}), 200
 
 
 @orders_bp.route('/orders/<int:id>', methods=['PATCH'])
@@ -225,30 +192,26 @@ def update_order_status(update_data, id):
     Customers can only transition: pending→paid, pending→cancelled, paid→cancelled.
     Admins/Superadmins can perform any valid transition.
     """
-    user_id = int(get_jwt_identity())
-    user = db.session.get(User, user_id)
+    user = get_current_user()
     if not user:
         return unauthorized_response("Authenticated user not found.")
 
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
-    if not order or (not is_admin and order.user_id != user_id):
+    if not order or (not is_admin and order.user_id != user.id):
         return not_found_response("Order", id)
 
     new_status = update_data['status']
     current_status = order.status
 
-    # Transition validation via validator
     err = validate_order_status_transition(current_status, new_status, is_admin)
     if err:
         return err
 
     try:
-        # If transitioning to shipped, record tracking number
         if new_status == 'shipped':
             order.tracking_number = update_data['tracking_number'].strip()
 
-        # If transitioning to cancelled, restore stock for all items with row lock and record cancellation reason
         if new_status == 'cancelled':
             order.cancellation_reason = update_data['cancellation_reason'].strip()
             items_to_restore = db.session.execute(
@@ -265,7 +228,7 @@ def update_order_status(update_data, id):
         db.session.rollback()
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while updating the order status.", 500)
 
-    return jsonify({"data": get_order_detailed_payload(order)}), 200
+    return jsonify({"data": order.to_detail_dict()}), 200
 
 
 @orders_bp.route('/orders/<int:id>', methods=['DELETE'])
@@ -278,17 +241,15 @@ def delete_order(id):
     Cancelled orders require a cancellation_reason (via JSON body or query param).
     Stock is restored and order history is preserved.
     """
-    user_id = int(get_jwt_identity())
-    user = db.session.get(User, user_id)
+    user = get_current_user()
     if not user:
         return unauthorized_response("Authenticated user not found.")
 
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
-    if not order or (not is_admin and order.user_id != user_id):
+    if not order or (not is_admin and order.user_id != user.id):
         return not_found_response("Order", id)
 
-    # Validate cancellation eligibility
     err = validate_order_cancellation(order.status)
     if err:
         return err
@@ -305,7 +266,6 @@ def delete_order(id):
         }), 422
 
     try:
-        # Restore stock for each item in the order with row lock
         items_to_restore = db.session.execute(
             order_items.select().where(order_items.c.order_id == id)
         ).fetchall()
@@ -315,7 +275,6 @@ def delete_order(id):
             if product:
                 product.stock += item.quantity
 
-        # Soft-cancel: mark as cancelled, record reason, preserve the row and all history
         order.status = 'cancelled'
         order.cancellation_reason = str(cancellation_reason).strip()
         db.session.commit()
@@ -323,4 +282,4 @@ def delete_order(id):
         db.session.rollback()
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while cancelling the order.", 500)
 
-    return jsonify({"data": get_order_detailed_payload(order)}), 200
+    return jsonify({"data": order.to_detail_dict()}), 200

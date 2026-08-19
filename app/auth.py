@@ -38,14 +38,23 @@ def roles_required(*roles):
     return decorator
 
 
+def get_current_user() -> User | None:
+    """Returns the authenticated User model instance from current JWT context, or None."""
+    try:
+        user_id = get_jwt_identity()
+        if user_id:
+            return db.session.get(User, int(user_id))
+    except Exception:
+        pass
+    return None
+
+
 def is_admin_user():
     """Returns True if the current request carries a valid JWT belonging to an active admin/superadmin."""
     try:
         verify_jwt_in_request(optional=True)
-        user_id = get_jwt_identity()
-        if user_id:
-            user = db.session.get(User, int(user_id))
-            return bool(user and user.is_active and user.role in ['superadmin', 'admin'])
+        user = get_current_user()
+        return bool(user and user.is_active and user.role in ['superadmin', 'admin'])
     except Exception:
         pass
     return False

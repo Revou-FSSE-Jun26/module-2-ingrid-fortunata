@@ -4,7 +4,6 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import selectinload
 from app.extensions import db
 from app.models.category import Category
-from app.models.product import Product
 from app.auth import roles_required, is_admin_user
 from app.schemas import (
     CategoryCreateInputSchema,
@@ -92,14 +91,8 @@ def get_category_by_id(id):
     if not category:
         return not_found_response("Category", id)
 
-    cat_dict = category.to_dict()
-    if not is_admin:
-        cat_dict['products'] = [p.to_dict() for p in category.products if p.is_active]
-    else:
-        cat_dict['products'] = [p.to_dict() for p in category.products]
-
     return jsonify({
-        "data": cat_dict
+        "data": category.to_with_products_dict(is_admin=is_admin)
     }), 200
 
 
