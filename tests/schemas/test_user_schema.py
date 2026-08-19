@@ -81,3 +81,55 @@ def test_user_login_schema_valid_with_username_or_email():
 
     res2 = schema.load({"email": "alice@example.com", "password": "pw"})
     assert res2["email"] == "alice@example.com"
+
+
+def test_user_update_schema_success():
+    """Verify valid update payloads pass schema validation."""
+    from app.schemas.user import UserUpdateInputSchema
+    schema = UserUpdateInputSchema()
+
+    res = schema.load({"username": "new_name", "email": "new@example.com", "role": "admin", "is_active": False})
+    assert res["username"] == "new_name"
+    assert res["email"] == "new@example.com"
+    assert res["role"] == "admin"
+    assert res["is_active"] is False
+
+
+def test_user_update_schema_empty_payload_raises():
+    """Verify empty dictionary raises ValidationError requiring at least one field."""
+    from app.schemas.user import UserUpdateInputSchema
+    schema = UserUpdateInputSchema()
+
+    with pytest.raises(ValidationError) as exc_info:
+        schema.load({})
+
+    errors = exc_info.value.messages
+    assert "_schema" in errors
+    assert "At least one field must be provided to update." in errors["_schema"]
+
+
+def test_user_update_schema_invalid_role_raises():
+    """Verify invalid role string raises ValidationError."""
+    from app.schemas.user import UserUpdateInputSchema
+    schema = UserUpdateInputSchema()
+
+    with pytest.raises(ValidationError) as exc_info:
+        schema.load({"role": "super_manager"})
+
+    errors = exc_info.value.messages
+    assert "role" in errors
+    assert "Invalid role" in errors["role"][0]
+
+
+def test_user_update_schema_username_with_spaces_raises():
+    """Verify username with spaces raises ValidationError."""
+    from app.schemas.user import UserUpdateInputSchema
+    schema = UserUpdateInputSchema()
+
+    with pytest.raises(ValidationError) as exc_info:
+        schema.load({"username": "bad name"})
+
+    errors = exc_info.value.messages
+    assert "username" in errors
+    assert "Username cannot contain spaces." in errors["username"]
+

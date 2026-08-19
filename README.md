@@ -589,14 +589,84 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 
 ---
 
+##### `GET /users`
+- **Auth**: JWT Required (`Authorization: Bearer <token>`)
+- **Permissions**: **Superadmin only** (`@roles_required('superadmin')`).
+- **Description**: Retrieve a list of registered user accounts with support for role filtering, active status filtering, search across username/email, and pagination.
+- **Query Parameters**:
+  | Parameter | Type | Options / Validation | Description |
+  | :--- | :--- | :--- | :--- |
+  | `role` | String | `customer`, `admin`, `superadmin` | Filter users by system role |
+  | `is_active` | String / Boolean | `true`, `false`, `1`, `0` | Filter users by account activation state |
+  | `search` | String | Substring search | Case-insensitive search across `username` and `email` |
+  | `page` | Integer | Min `1` (Default `1`) | Page number for pagination |
+  | `per_page` | Integer | Min `1`, Max `100` (Default `10`) | Number of user records per page |
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "data": [
+      {
+        "id": 1,
+        "username": "superadmin_user",
+        "email": "superadmin@revofashion.com",
+        "role": "superadmin",
+        "is_active": true,
+        "created_at": "2026-08-19T10:00:00+00:00"
+      }
+    ]
+  }
+  ```
+- **Error Responses**:
+  | Status | `error_code` | Reason |
+  | :--- | :--- | :--- |
+  | `401 Unauthorized` | `UNAUTHORIZED` / `TOKEN_MISSING` | Missing or invalid authentication token |
+  | `403 Forbidden` | `FORBIDDEN` | Caller is not a superadmin or account is deactivated |
+
+---
+
 ##### `GET /users/<id>`
 - **Auth**: JWT Required (`Authorization: Bearer <token>`)
 - **Permissions**: Customers can access **only their own** profile (`user_id == id`). Admins and superadmins can view any profile.
 - **Success Response (`200 OK`)**: Returns user profile details.
+- **Error Responses**:
+  | Status | `error_code` | Reason |
+  | :--- | :--- | :--- |
+  | `401 Unauthorized` | `TOKEN_MISSING` / `USER_NOT_FOUND` | Missing auth token or authenticated user not found |
+  | `403 Forbidden` | `USER_FORBIDDEN` | Customer attempting to view another user's profile |
+  | `404 Not Found` | `USER_NOT_FOUND` | User with the requested ID does not exist |
+
+---
+
+##### `PUT /users/<id>`
+- **Auth**: JWT Required (`Authorization: Bearer <token>`)
+- **Permissions**:
+  - **Customers**: Can update **only their own profile** (`user_id == id`) and modify only `username` and `email`.
+  - **Superadmin**: Can update **any profile** (`<id>`), and can additionally update privileged fields `role` (`customer`, `admin`, `superadmin`) and `is_active` (`true`/`false`).
+  - If a non-superadmin supplies `role` or `is_active`, the API responds with `403 Forbidden`.
+- **Request Body Payload**:
+  | Field | Type | Required | Options / Validation |
+  | :--- | :--- | :---: | :--- |
+  | `username` | String | Optional | Max 50 chars, no spaces, non-blank, unique |
+  | `email` | String | Optional | Valid email format, unique |
+  | `role` | String | Optional | `customer`, `admin`, `superadmin` **(Superadmin only)** |
+  | `is_active` | Boolean | Optional | `true` or `false` **(Superadmin only)** |
+- **Success Response (`200 OK`)**: Returns the updated user profile.
+- **Error Responses**:
+  | Status | `error_code` | Reason |
+  | :--- | :--- | :--- |
+  | `401 Unauthorized` | `TOKEN_MISSING` / `USER_NOT_FOUND` | Missing token or authenticated user not found |
+  | `403 Forbidden` | `USER_DEACTIVATED` | Authenticated user account is deactivated |
+  | `403 Forbidden` | `USER_FORBIDDEN` | Customer attempting to update another user's profile, or non-superadmin attempting to update `role` / `is_active` |
+  | `404 Not Found` | `USER_NOT_FOUND` | User with the requested ID does not exist |
+  | `409 Conflict` | `USER_NAME_CONFLICT` | Updated username is already taken by another user |
+  | `409 Conflict` | `USER_EMAIL_CONFLICT` | Updated email is already taken by another user |
+  | `422 Unprocessable Entity` | `VALIDATION_ERROR` | Empty request payload or field validation failure |
+
 
 ---
 
 #### 2. Products Catalog
+
 
 ##### `GET /products`
 - **Auth**: Optional (JWT for admin features)

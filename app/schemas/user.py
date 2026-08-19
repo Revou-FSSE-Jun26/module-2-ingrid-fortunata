@@ -55,6 +55,33 @@ class UserGetResponseSchema(Schema):
     data = fields.Nested(UserSchema, dump_only=True)
 
 
+class UserListResponseSchema(Schema):
+    data = fields.List(fields.Nested(UserSchema), dump_only=True)
+
+
+class UserUpdateInputSchema(Schema):
+    username = fields.Str(validate=[validate.Length(min=1, max=50), not_blank])
+    email = fields.Email()
+    role = fields.Str(validate=validate.OneOf(
+        ['customer', 'admin', 'superadmin'],
+        error="Invalid role. Must be one of: customer, admin, superadmin."
+    ))
+    is_active = fields.Bool()
+
+    @validates("username")
+    def validate_username_no_spaces(self, value, **kwargs):
+        if " " in value:
+            raise ValidationError("Username cannot contain spaces.")
+
+    @validates_schema
+    def validate_not_empty(self, data, **kwargs):
+        """Reject empty update bodies — at least one field must be provided."""
+        if not data:
+            raise ValidationError(
+                {"_schema": ["At least one field must be provided to update."]}
+            )
+
+
 class AuthLoginResponseDataSchema(Schema):
     token = fields.Str(dump_only=True)
     user = fields.Nested(UserSchema, dump_only=True)
@@ -62,3 +89,4 @@ class AuthLoginResponseDataSchema(Schema):
 
 class AuthLoginResponseSchema(Schema):
     data = fields.Nested(AuthLoginResponseDataSchema, dump_only=True)
+
