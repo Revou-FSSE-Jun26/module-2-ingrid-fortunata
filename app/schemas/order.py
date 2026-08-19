@@ -1,4 +1,6 @@
-from marshmallow import Schema, fields, validates, ValidationError
+from marshmallow import Schema, fields, validates, ValidationError, validate
+
+VALID_STATUSES = {'pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'}
 
 class OrderItemInputSchema(Schema):
     product_id = fields.Int(required=True)
@@ -44,3 +46,12 @@ class OrderResponseWrapperSchema(Schema):
 
 class OrderListResponseSchema(Schema):
     data = fields.List(fields.Nested(OrderResponseSchema), dump_only=True)
+
+class OrderUpdateStatusSchema(Schema):
+    status = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            list(VALID_STATUSES),
+            error="Invalid status. Must be one of: pending, paid, processing, shipped, delivered, cancelled."
+        )
+    )

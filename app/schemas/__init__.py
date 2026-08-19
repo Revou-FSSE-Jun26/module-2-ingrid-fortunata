@@ -34,4 +34,5 @@ from app.schemas.order import (
     OrderDetailSchema,
     OrderResponseWrapperSchema,
     OrderListResponseSchema,
+    OrderUpdateStatusSchema,
 )

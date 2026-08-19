@@ -10,6 +10,7 @@ from app.schemas import (
     OrderCreateInputSchema,
     OrderResponseWrapperSchema,
     OrderListResponseSchema,
+    OrderUpdateStatusSchema,
 )
 
 orders_bp = Blueprint('orders', __name__, description='Operations on orders')
@@ -218,10 +219,34 @@ def get_order_by_id(id):
         "data": order_payload
     }), 200
 
-@orders_bp.route('/orders/<int:id>', methods=['DELETE'])
+# Valid status transitions for each current status
+STATUS_TRANSITIONS = {
+    'pending':    ['paid', 'cancelled'],
+    'paid':       ['processing', 'cancelled'],
+    'processing': ['shipped'],
+    'shipped':    ['delivered'],
+    'delivered':  [],
+    'cancelled':  [],
+}
+
+# Statuses that customers are allowed to trigger themselves
+CUSTOMER_ALLOWED_TRANSITIONS = {
+    'pending': ['paid', 'cancelled'],
+    'paid':    ['cancelled'],
+}
+
+@orders_bp.route('/orders/<int:id>', methods=['PATCH'])
 @jwt_required()
-def delete_order(id):
-    """Delete an order. Admins/Sellers/Superadmins can cancel any order, customers only their own."""
+@orders_bp.arguments(OrderUpdateStatusSchema, location='json')
+@orders_bp.response(200, OrderResponseWrapperSchema)
+def update_order_status(update_data, id):
+    """Update the status of an order with valid transition enforcement.
+    
+    Status lifecycle: pending → paid → processing → shipped → delivered
+    Cancellation (→ cancelled) is only allowed from 'pending' or 'paid'.
+    Customers can only transition: pending→paid, pending→cancelled, paid→cancelled.
+    Admins/Sellers/Superadmins can perform any valid transition.
+    """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     if not user:
@@ -238,7 +263,119 @@ def delete_order(id):
             "message": f"Order with ID {id} not found."
         }), 404
 
+    new_status = update_data['status']
+    current_status = order.status
+
+    # No-op: already on requested status
+    if current_status == new_status:
+        return jsonify({
+            "error_code": "ORDER_STATUS_NO_CHANGE",
+            "message": f"Order is already in '{current_status}' status."
+        }), 409
+
+    # Check if the transition is globally valid
+    allowed_next = STATUS_TRANSITIONS.get(current_status, [])
+    if new_status not in allowed_next:
+        return jsonify({
+            "error_code": "ORDER_INVALID_TRANSITION",
+            "message": f"Cannot transition order from '{current_status}' to '{new_status}'. "
+                       f"Allowed next status(es): {allowed_next if allowed_next else 'none'}."
+        }), 409
+
+    # Role-based restriction: customers have limited transitions
+    if not is_admin:
+        customer_allowed = CUSTOMER_ALLOWED_TRANSITIONS.get(current_status, [])
+        if new_status not in customer_allowed:
+            return jsonify({
+                "error_code": "ORDER_FORBIDDEN_TRANSITION",
+                "message": f"Customers cannot change order status from '{current_status}' to '{new_status}'."
+            }), 403
+
     try:
+        order.status = new_status
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error_code": "ORDER_DATABASE_ERROR",
+            "message": "An error occurred while updating the order status."
+        }), 500
+
+    # Build response with items
+    items_query = db.session.query(
+        order_items.c.product_id,
+        order_items.c.quantity,
+        order_items.c.price_at_purchase,
+        order_items.c.size,
+        order_items.c.color,
+        Product.name,
+        Product.description
+    ).join(
+        Product, order_items.c.product_id == Product.id
+    ).filter(
+        order_items.c.order_id == id
+    ).all()
+
+    detailed_items = [{
+        "product_id": row.product_id,
+        "name": row.name,
+        "description": row.description,
+        "quantity": row.quantity,
+        "price_at_purchase": float(row.price_at_purchase),
+        "size": row.size,
+        "color": row.color
+    } for row in items_query]
+
+    order_payload = order.to_dict()
+    order_payload['items'] = detailed_items
+
+    return jsonify({"data": order_payload}), 200
+
+# Statuses that are still cancellable
+CANCELLABLE_STATUSES = {'pending', 'paid'}
+
+@orders_bp.route('/orders/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_order(id):
+    """Cancel an order. Only orders with status 'pending' or 'paid' can be cancelled.
+    Admins/Sellers/Superadmins can cancel any eligible order, customers only their own.
+    Cancelled orders will have their product stock restored.
+    """
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({
+            "error_code": "USER_NOT_FOUND",
+            "message": "User not found."
+        }), 401
+
+    order = db.session.get(Order, id)
+    is_admin = user.role in ['superadmin', 'admin', 'seller']
+    if not order or (not is_admin and order.user_id != user_id):
+        return jsonify({
+            "error_code": "ORDER_NOT_FOUND",
+            "message": f"Order with ID {id} not found."
+        }), 404
+
+    # Validate order status before cancellation
+    if order.status not in CANCELLABLE_STATUSES:
+        return jsonify({
+            "error_code": "ORDER_CANNOT_BE_CANCELLED",
+            "message": f"Order with status '{order.status}' cannot be cancelled. "
+                       f"Only orders with status 'pending' or 'paid' can be cancelled."
+        }), 409
+
+    try:
+        # Restore stock for each item in the order before deleting
+        items_to_restore = db.session.execute(
+            order_items.select().where(order_items.c.order_id == id)
+        ).fetchall()
+
+        for item in items_to_restore:
+            product = db.session.get(Product, item.product_id)
+            if product:
+                product.stock += item.quantity
+
         # Delete order_items first due to RESTRICT constraint
         db.session.execute(order_items.delete().where(order_items.c.order_id == id))
         db.session.delete(order)
@@ -247,7 +384,7 @@ def delete_order(id):
         db.session.rollback()
         return jsonify({
             "error_code": "ORDER_DATABASE_ERROR",
-            "message": "An error occurred while deleting the order."
+            "message": "An error occurred while cancelling the order."
         }), 500
 
     return '', 204

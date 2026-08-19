@@ -25,6 +25,8 @@ The project is built progressively across bi-weekly checkpoints, covering **Chec
 - ✅ Many-to-many relationship between `orders` and `products` via the `order_items` association table
 - ✅ Product image support (base64-encoded, up to 3 images per product, one primary)
 - ✅ Stock decrement on order creation with validation guard
+- ✅ Stock restoration when an order is cancelled
+- ✅ Order status lifecycle enforcement with role-based transition rules
 - ✅ Swagger / OpenAPI 3.0 interactive documentation via Flask-Smorest
 - ✅ Consistent JSON error response structure across all endpoints
 
@@ -66,7 +68,7 @@ module-2-ingrid-fortunata/
 │   │   ├── products.py       # GET, POST, PUT, DELETE /products
 │   │   ├── users.py          # POST /users, GET /users/<id>, POST /auth/login
 │   │   ├── categories.py     # GET, POST, PUT, DELETE /categories
-│   │   └── orders.py         # GET, POST, DELETE /orders
+│   │   └── orders.py         # GET, POST, PATCH, DELETE /orders
 │   ├── schemas/
 │   │   ├── __init__.py       # Re-exports all marshmallow schemas
 │   │   ├── user.py           # UserRegisterInputSchema, UserGetResponseSchema, etc.
@@ -190,11 +192,37 @@ The `role` column on the `users` table controls access to protected endpoints vi
 
 The `status` column on the `orders` table tracks the lifecycle of an order.
 
-| Status    | Description                                                            |
-| :-------- | :--------------------------------------------------------------------- |
-| `pending` | Order has been placed and is awaiting processing (default on creation) |
+| Status        | Description                                                             |
+| :------------ | :---------------------------------------------------------------------- |
+| `pending`     | Order placed, awaiting payment (default on creation)                    |
+| `paid`        | Customer has completed payment                                          |
+| `processing`  | Seller/admin is preparing the order                                     |
+| `shipped`     | Order has been dispatched                                               |
+| `delivered`   | Order successfully received by the customer                             |
+| `cancelled`   | Order was cancelled (only from `pending` or `paid`)                     |
 
-> Additional statuses (e.g., `processing`, `shipped`, `delivered`, `cancelled`) can be added in future checkpoints as the order workflow is expanded.
+### Status Transition Rules
+
+Status can only move **forward** according to this flow:
+
+```
+pending ──→ paid ──→ processing ──→ shipped ──→ delivered
+   │           │
+   └───────────┴──────────────────────────────→ cancelled
+```
+
+| From \ To     | `paid` | `processing` | `shipped` | `delivered` | `cancelled` |
+| :------------ | :----: | :----------: | :-------: | :---------: | :---------: |
+| `pending`     | ✅      | ❌            | ❌         | ❌           | ✅           |
+| `paid`        | ❌      | ✅ *          | ❌         | ❌           | ✅           |
+| `processing`  | ❌      | ❌            | ✅ *       | ❌           | ❌           |
+| `shipped`     | ❌      | ❌            | ❌         | ✅ *         | ❌           |
+| `delivered`   | —      | —            | —         | —           | —           |
+| `cancelled`   | —      | —            | —         | —           | —           |
+
+> \* Admin / Seller / Superadmin only. Customers can only trigger: `pending → paid`, `pending → cancelled`, `paid → cancelled`.
+
+> **Cancellation & stock**: When an order is cancelled, all product stock quantities are automatically restored.
 
 ---
 
@@ -235,12 +263,13 @@ The `status` column on the `orders` table tracks the lifecycle of an order.
 
 ### Orders
 
-| Method   | Endpoint       | Auth Required     | Description                                                      |
-| :------- | :------------- | :---------------- | :--------------------------------------------------------------- |
-| `GET`    | `/orders`      | All authenticated | Admins/sellers see all orders; customers see only their own      |
-| `GET`    | `/orders/<id>` | All authenticated | View order detail; customers restricted to their own orders      |
-| `POST`   | `/orders`      | All authenticated | Place a new order; validates stock and decrements on success     |
-| `DELETE` | `/orders/<id>` | All authenticated | Cancel/delete an order; customers restricted to their own orders |
+| Method   | Endpoint        | Auth Required     | Description                                                                 |
+| :------- | :-------------- | :---------------- | :-------------------------------------------------------------------------- |
+| `GET`    | `/orders`       | All authenticated | Admins/sellers see all orders; customers see only their own                 |
+| `GET`    | `/orders/<id>`  | All authenticated | View order detail with items; customers restricted to their own orders      |
+| `POST`   | `/orders`       | All authenticated | Place a new order; validates stock and decrements on success                |
+| `PATCH`  | `/orders/<id>`  | All authenticated | Update order status following the lifecycle rules (see Status Transitions)  |
+| `DELETE` | `/orders/<id>`  | All authenticated | Cancel an order (only `pending`/`paid`); restores product stock             |
 
 ---
 
