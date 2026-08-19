@@ -1,3 +1,4 @@
+import secrets
 from flask_smorest import Blueprint
 from flask import jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
@@ -14,6 +15,13 @@ from app.schemas import (
 )
 
 products_bp = Blueprint('products', __name__, description='Operations on products')
+
+def generate_unique_sku():
+    """Generates a random unique SKU code with prefix UQ-."""
+    while True:
+        sku_candidate = f"UQ-{secrets.token_hex(4).upper()}"
+        if not Product.query.filter_by(sku=sku_candidate).first():
+            return sku_candidate
 
 @products_bp.route('/products', methods=['GET'])
 @products_bp.response(200, ProductListResponseSchema)
@@ -131,7 +139,7 @@ def get_product_by_id(id):
     }), 200
 
 @products_bp.route('/products', methods=['POST'])
-@roles_required('superadmin', 'admin', 'seller')
+@roles_required('superadmin', 'admin')
 @products_bp.arguments(ProductCreateInputSchema, location='json')
 @products_bp.response(201, ProductDetailResponseSchema)
 def create_product(product_data):
@@ -144,6 +152,10 @@ def create_product(product_data):
                 "error_code": "CATEGORY_NOT_FOUND",
                 "message": "Category not found."
             }), 400
+
+    # Auto-generate unique SKU if not provided
+    if not product_data.get('sku'):
+        product_data['sku'] = generate_unique_sku()
 
     try:
         new_product = Product(**product_data)
@@ -179,7 +191,7 @@ def create_product(product_data):
     }), 201
 
 @products_bp.route('/products/<int:id>', methods=['PUT'])
-@roles_required('superadmin', 'admin', 'seller')
+@roles_required('superadmin', 'admin')
 @products_bp.arguments(ProductUpdateInputSchema, location='json')
 @products_bp.response(200, ProductDetailResponseSchema)
 def update_product(product_data, id):
@@ -237,7 +249,7 @@ def update_product(product_data, id):
     }), 200
 
 @products_bp.route('/products/<int:id>', methods=['DELETE'])
-@roles_required('superadmin', 'admin', 'seller')
+@roles_required('superadmin', 'admin')
 def delete_product(id):
     """Delete a product, blocked if linked to any orders."""
     product = db.session.get(Product, id)

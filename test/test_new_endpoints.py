@@ -38,21 +38,32 @@ class NewEndpointsTestCase(unittest.TestCase):
         headers = self._get_admin_headers()
 
         # Test create validation fail (negative price)
-        bad_payload = {"name": "Broken", "price": -5, "stock": 10}
+        bad_payload = {"name": "Broken", "price": -5, "stock": 10, "color": "Black"}
         res = self.client.post('/products', json=bad_payload, headers=headers)
         self.assertEqual(res.status_code, 400)
 
-        # Test create success
-        payload = {"name": "New Gaming Mouse", "price": 49.99, "stock": 20}
+        # Test create validation fail (missing color)
+        bad_payload_no_color = {"name": "No Color Shirt", "price": 19.90, "stock": 10}
+        res = self.client.post('/products', json=bad_payload_no_color, headers=headers)
+        self.assertEqual(res.status_code, 400)
+
+        # Test create success with defaults (size -> Free Size, gender -> Unisex, auto SKU)
+        payload = {"name": "Unisex Shoulder Bag", "price": 24.90, "stock": 50, "color": "Olive"}
         res = self.client.post('/products', json=payload, headers=headers)
         self.assertEqual(res.status_code, 201)
-        prod_id = res.get_json()['data']['id']
+        prod_data = res.get_json()['data']
+        prod_id = prod_data['id']
+        self.assertEqual(prod_data['size'], "Free Size")
+        self.assertEqual(prod_data['gender'], "Unisex")
+        self.assertEqual(prod_data['color'], "Olive")
+        self.assertTrue(prod_data['sku'].startswith("UQ-"))
 
         # Test update
-        up_payload = {"price": 39.99}
+        up_payload = {"price": 29.90, "color": "Navy"}
         res = self.client.put(f'/products/{prod_id}', json=up_payload, headers=headers)
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.get_json()['data']['price'], 39.99)
+        self.assertEqual(res.get_json()['data']['price'], 29.90)
+        self.assertEqual(res.get_json()['data']['color'], "Navy")
 
         # Test delete success
         res = self.client.delete(f'/products/{prod_id}', headers=headers)
@@ -71,6 +82,7 @@ class NewEndpointsTestCase(unittest.TestCase):
             "name": "Broken Mouse",
             "price": 10.00,
             "stock": 5,
+            "color": "Black",
             "images": [
                 {"image_base64": "img1"},
                 {"image_base64": "img2"},
@@ -86,6 +98,7 @@ class NewEndpointsTestCase(unittest.TestCase):
             "name": "Broken Mouse",
             "price": 10.00,
             "stock": 5,
+            "color": "Black",
             "images": [{"image_base64": "a" * 2000000}]
         }
         res = self.client.post('/products', json=huge_payload, headers=headers)
@@ -96,6 +109,7 @@ class NewEndpointsTestCase(unittest.TestCase):
             "name": "Double Mouse",
             "price": 10.00,
             "stock": 5,
+            "color": "Black",
             "images": [
                 {"image_base64": "img1", "is_primary": True},
                 {"image_base64": "img2", "is_primary": True}
@@ -106,9 +120,10 @@ class NewEndpointsTestCase(unittest.TestCase):
 
         # Test create success - defaults first to primary
         success_payload = {
-            "name": "Camera",
-            "price": 350.00,
+            "name": "Camera Bag",
+            "price": 35.00,
             "stock": 10,
+            "color": "Black",
             "images": [
                 {"image_base64": "base64_data_1"},
                 {"image_base64": "base64_data_2"}
@@ -174,11 +189,11 @@ class NewEndpointsTestCase(unittest.TestCase):
 
         # Get product to verify stock
         from app.models.product import Product
-        prod = Product.query.filter_by(name="Organic Cotton Hoodie").first()
+        prod = Product.query.filter_by(is_active=True).first()
         self.assertIsNotNone(prod)
         initial_stock = prod.stock
 
-        # Place order (now requires shipping details)
+        # Place order (now requires shipping details, items sync size and color from product)
         order_payload = {
             "items": [{"product_id": prod.id, "quantity": 2}],
             "shipping_address": "Jl. Sudirman No.1, Jakarta",
@@ -191,9 +206,13 @@ class NewEndpointsTestCase(unittest.TestCase):
         order_data = res.get_json()['data']
         order_id = order_data['id']
         self.assertEqual(order_data['items'][0]['quantity'], 2)
+        # Verify size and color are synced from product
+        self.assertEqual(order_data['items'][0]['size'], prod.size)
+        self.assertEqual(order_data['items'][0]['color'], prod.color)
         # Verify shipping fields are returned
         self.assertEqual(order_data['shipping_address'], "Jl. Sudirman No.1, Jakarta")
         self.assertEqual(order_data['recipient_name'], "Alice Smith")
+        self.assertEqual(order_data['recipient_phone'], "08123456789")
 
         # Verify stock decrement
         db.session.refresh(prod)
@@ -316,6 +335,72 @@ class NewEndpointsTestCase(unittest.TestCase):
         if user_two:
             db.session.delete(user_two)
             db.session.commit()
+
+    def test_fashion_adjustments_and_role_restrictions(self):
+        admin_headers = self._get_admin_headers()
+        customer_headers = self._get_customer_headers()
+
+        # 1. Test user registration with invalid 'seller' role gets rejected
+        reg_seller = {
+            "username": "seller_candidate",
+            "email": "seller_candidate@example.com",
+            "password": "password123",
+            "role": "seller"
+        }
+        res_seller = self.client.post('/users', json=reg_seller)
+        self.assertIn(res_seller.status_code, [400, 422])  # Marshmallow schema validation error
+
+        # 2. Test product creation: Size defaults to Free Size, Gender to Unisex, SKU auto-generated
+        bag_payload = {
+            "name": "Canvas Tote Bag",
+            "description": "Minimalist everyday tote bag",
+            "price": 19.90,
+            "stock": 40,
+            "color": "Natural Beige"
+            # size, gender, sku omitted intentionally
+        }
+        res_bag = self.client.post('/products', json=bag_payload, headers=admin_headers)
+        self.assertEqual(res_bag.status_code, 201)
+        bag_data = res_bag.get_json()['data']
+        bag_id = bag_data['id']
+        self.assertEqual(bag_data['size'], "Free Size")
+        self.assertEqual(bag_data['gender'], "Unisex")
+        self.assertEqual(bag_data['color'], "Natural Beige")
+        self.assertTrue(bag_data['sku'].startswith("UQ-"))
+
+        # 3. Test order creation without shipping details gets rejected
+        order_missing_shipping = {
+            "items": [{"product_id": bag_id, "quantity": 1}],
+            "shipping_address": "",  # Empty
+            "recipient_name": "Alice",
+            "recipient_phone": "0812345678"
+        }
+        res_bad_order = self.client.post('/orders', json=order_missing_shipping, headers=customer_headers)
+        self.assertIn(res_bad_order.status_code, [400, 422])
+
+        # 4. Test order creation: Item inherits size and color from product
+        order_valid = {
+            "items": [{"product_id": bag_id, "quantity": 1}],
+            "shipping_address": "Jl. Senopati No. 20, Jakarta",
+            "recipient_name": "Alice Smith",
+            "recipient_phone": "081298765432"
+        }
+        res_order = self.client.post('/orders', json=order_valid, headers=customer_headers)
+        self.assertEqual(res_order.status_code, 201)
+        created_order = res_order.get_json()['data']
+        self.assertEqual(created_order['shipping_address'], "Jl. Senopati No. 20, Jakarta")
+        self.assertEqual(created_order['recipient_name'], "Alice Smith")
+        self.assertEqual(created_order['recipient_phone'], "081298765432")
+        self.assertEqual(created_order['items'][0]['size'], "Free Size")
+        self.assertEqual(created_order['items'][0]['color'], "Natural Beige")
+
+        # Cleanup created product and order
+        from app.models.order import Order
+        ord_obj = db.session.get(Order, created_order['id'])
+        if ord_obj:
+            db.session.delete(ord_obj)
+            db.session.commit()
+        self.client.delete(f'/products/{bag_id}', headers=admin_headers)
 
 if __name__ == '__main__':
     unittest.main()

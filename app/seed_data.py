@@ -137,6 +137,13 @@ def seed_database():
                 'price': 12.90, 'stock': 160, 'size': 'S', 'color': 'White',
                 'material': '62% Cotton, 33% Polyester, 5% Spandex', 'gender': 'Women', 'sku': 'RF-IW-002'
             },
+            # Accessories (Free Size demo)
+            {
+                'category': 'Outerwear', 'name': 'Round Mini Shoulder Bag',
+                'description': 'Viral lightweight round mini shoulder bag with water-repellent finish. Fits all daily essentials.',
+                'price': 19.90, 'stock': 250, 'size': 'Free Size', 'color': 'Black',
+                'material': '100% Nylon', 'gender': 'Unisex', 'sku': 'RF-AC-001'
+            },
         ]
 
         # Inactive product for testing
@@ -163,7 +170,7 @@ def seed_database():
 
         db.session.commit()
 
-        # ─── 3. Users ───
+        # ─── 3. Users (superadmin, admin, customer) ───
         superadmin = User.query.filter_by(username='superadmin_user').first()
         if not superadmin:
             superadmin = User(
@@ -185,17 +192,6 @@ def seed_database():
                 is_active=True
             )
             db.session.add(admin)
-
-        seller = User.query.filter_by(username='seller_user').first()
-        if not seller:
-            seller = User(
-                username='seller_user',
-                email='seller@revofashion.com',
-                password_hash=generate_password_hash('seller_password'),
-                role='seller',
-                is_active=True
-            )
-            db.session.add(seller)
 
         alice = User.query.filter_by(username='alice_smith').first()
         if not alice:
@@ -221,7 +217,7 @@ def seed_database():
 
         db.session.commit()
 
-        # ─── 4. Orders (Fashion purchases with size/color) ───
+        # ─── 4. Orders (Fashion purchases with size/color & shipping details) ───
         existing_order = Order.query.filter_by(user_id=alice.id).first()
         if not existing_order:
             # Order 1: Alice buys AIRism T-Shirt + EZY Ankle Pants
@@ -232,7 +228,10 @@ def seed_database():
                 new_order = Order(
                     user_id=alice.id,
                     total_amount=float(p_airism.price) + float(p_ezy.price),
-                    status='pending'
+                    status='pending',
+                    shipping_address='Jl. Sudirman No. 10, Jakarta Pusat, DKI Jakarta 10220',
+                    recipient_name='Alice Smith',
+                    recipient_phone='081234567890'
                 )
                 db.session.add(new_order)
                 db.session.commit()

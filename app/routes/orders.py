@@ -37,8 +37,6 @@ def create_order(order_data):
     for item in items:
         prod_id = item.get('product_id')
         qty = item.get('quantity')
-        item_size = item.get('size')
-        item_color = item.get('color')
 
         if qty is None or qty <= 0:
             return jsonify({
@@ -64,6 +62,10 @@ def create_order(order_data):
                 "error_code": "PRODUCT_STOCK_VALIDATION_ERROR",
                 "message": f"Insufficient stock for product '{product.name}'."
             }), 400
+
+        # Sync size and color with product if not explicitly provided
+        item_size = item.get('size') or product.size or 'Free Size'
+        item_color = item.get('color') or product.color
 
         # Decrement stock
         product.stock -= qty
@@ -140,7 +142,7 @@ def get_orders():
             "message": "User not found."
         }), 401
 
-    if user.role in ['superadmin', 'admin', 'seller']:
+    if user.role in ['superadmin', 'admin']:
         query = Order.query
     else:
         query = Order.query.filter_by(user_id=user_id)
@@ -181,7 +183,7 @@ def get_order_by_id(id):
         }), 401
 
     order = db.session.get(Order, id)
-    is_admin = user.role in ['superadmin', 'admin', 'seller']
+    is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
             "error_code": "ORDER_NOT_FOUND",
@@ -259,7 +261,7 @@ def update_order_status(update_data, id):
         }), 401
 
     order = db.session.get(Order, id)
-    is_admin = user.role in ['superadmin', 'admin', 'seller']
+    is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
             "error_code": "ORDER_NOT_FOUND",
@@ -364,7 +366,7 @@ def delete_order(id):
         }), 401
 
     order = db.session.get(Order, id)
-    is_admin = user.role in ['superadmin', 'admin', 'seller']
+    is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user_id):
         return jsonify({
             "error_code": "ORDER_NOT_FOUND",

@@ -9,8 +9,8 @@ order_items = db.Table(
     db.Column('product_id', db.Integer, db.ForeignKey('products.id', ondelete='RESTRICT'), primary_key=True),
     db.Column('quantity', db.Integer, nullable=False, default=1),
     db.Column('price_at_purchase', db.Numeric(10, 2), nullable=False),
-    db.Column('size', db.String(20), nullable=True),
-    db.Column('color', db.String(50), nullable=True)
+    db.Column('size', db.String(20), nullable=False, default='Free Size', server_default='Free Size'),
+    db.Column('color', db.String(50), nullable=False)
 )
 
 class Order(db.Model):
@@ -20,9 +20,9 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
     total_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     status = db.Column(db.String(50), nullable=False, default='pending')
-    shipping_address = db.Column(db.Text, nullable=True)
-    recipient_name = db.Column(db.String(150), nullable=True)
-    recipient_phone = db.Column(db.String(30), nullable=True)
+    shipping_address = db.Column(db.Text, nullable=False)
+    recipient_name = db.Column(db.String(150), nullable=False)
+    recipient_phone = db.Column(db.String(30), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

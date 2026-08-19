@@ -1,6 +1,6 @@
 from marshmallow import Schema, fields, validates, ValidationError, validates_schema, validate
 
-VALID_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "FREE"]
+VALID_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "FREE", "Free Size"]
 VALID_GENDERS = ["Men", "Women", "Unisex", "Kids"]
 
 class ProductImageSchema(Schema):
@@ -26,25 +26,25 @@ class ProductSchema(Schema):
     description = fields.Str(allow_none=True)
     price = fields.Float(required=True)
     stock = fields.Int(required=True)
-    size = fields.Str(allow_none=True)
-    color = fields.Str(allow_none=True)
+    size = fields.Str()
+    color = fields.Str()
     material = fields.Str(allow_none=True)
-    gender = fields.Str(allow_none=True)
-    sku = fields.Str(allow_none=True)
+    gender = fields.Str()
+    sku = fields.Str()
     is_active = fields.Bool()
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 
 class ProductCreateInputSchema(Schema):
     category_id = fields.Int(allow_none=True)
-    name = fields.Str(required=True)
+    name = fields.Str(required=True, validate=validate.Length(min=1))
     description = fields.Str(allow_none=True)
     price = fields.Float(required=True)
     stock = fields.Int(required=True)
-    size = fields.Str(allow_none=True, validate=validate.OneOf(VALID_SIZES))
-    color = fields.Str(allow_none=True)
+    size = fields.Str(load_default="Free Size", validate=validate.OneOf(VALID_SIZES))
+    color = fields.Str(required=True, validate=validate.Length(min=1))
     material = fields.Str(allow_none=True)
-    gender = fields.Str(allow_none=True, validate=validate.OneOf(VALID_GENDERS))
+    gender = fields.Str(load_default="Unisex", validate=validate.OneOf(VALID_GENDERS))
     sku = fields.Str(allow_none=True)
     is_active = fields.Bool(load_default=True)
     images = fields.List(fields.Nested(ProductImageInputSchema), load_default=list)
@@ -72,14 +72,14 @@ class ProductCreateInputSchema(Schema):
 
 class ProductUpdateInputSchema(Schema):
     category_id = fields.Int(allow_none=True)
-    name = fields.Str()
+    name = fields.Str(validate=validate.Length(min=1))
     description = fields.Str(allow_none=True)
     price = fields.Float()
     stock = fields.Int()
-    size = fields.Str(allow_none=True, validate=validate.OneOf(VALID_SIZES))
-    color = fields.Str(allow_none=True)
+    size = fields.Str(validate=validate.OneOf(VALID_SIZES))
+    color = fields.Str(validate=validate.Length(min=1))
     material = fields.Str(allow_none=True)
-    gender = fields.Str(allow_none=True, validate=validate.OneOf(VALID_GENDERS))
+    gender = fields.Str(validate=validate.OneOf(VALID_GENDERS))
     sku = fields.Str(allow_none=True)
     is_active = fields.Bool()
     images = fields.List(fields.Nested(ProductImageInputSchema))
