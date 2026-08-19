@@ -197,6 +197,7 @@ JOIN products p ON oi.product_id = p.id;
 - ✅ **Automated Stock Control**: Stock is decremented on order placement and restored upon order cancellation.
 - ✅ **Soft-Cancel Order Deletion**: `DELETE /orders/<id>` performs a soft cancel (restores stock, sets status to `cancelled`, preserves audit row).
 - ✅ **Consistent Error Responses**: All API errors — including schema validation failures (422), JWT issues, and server errors — return a unified `{error_code, message}` JSON shape via global error handlers.
+- ✅ **API & Database Health Check**: Dedicated `GET /health` endpoint for infrastructure liveness/readiness probes (PostgreSQL connection check & UTC timestamps).
 - ✅ **OpenAPI 3.0 / Swagger UI**: Auto-generated interactive API docs via `Flask-Smorest` and `marshmallow`.
 
 ---
@@ -491,9 +492,16 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 
 ---
 
-### 📝 RESTful `PUT` Convention: Full Object Replacement
+### 📝 `PUT` Convention: Flexible Partial Updates
 
-Following standard REST architectural principles, the **`PUT`** HTTP method represents a **full object replacement** of the target resource. When issuing a `PUT` request, clients must supply the complete entity state.
+`PUT /products/<id>` and `PUT /categories/<id>` support flexible **partial updates**. Clients can provide either a full body or only the specific attributes they wish to modify (e.g. updating `stock` only). Unprovided fields and images are preserved as-is.
+
+#### Example: `PUT /products/<id>` (Partial Update: Stock Only)
+```json
+{
+  "stock": 50
+}
+```
 
 #### Example: `PUT /products/<id>` (Full Body Payload)
 ```json
@@ -669,7 +677,8 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 
 ##### `PUT /products/<id>`
 - **Auth**: JWT Required (`superadmin`, `admin`)
-- **Description**: Full replacement update of a product entity and its image gallery.
+- **Description**: Update a product entity and optional image gallery (supports partial or full payload). Unprovided fields and images are preserved as-is.
+- **Request Payload**: Any subset of product fields (e.g. `{"stock": 50}` or `{"price": 29.90, "name": "New Name"}`). Minimum 1 field required. Empty body (`{}`) returns `422`.
 
 ---
 
@@ -792,7 +801,42 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 - **Auth**: JWT Required
 - **Description**: Soft-cancel an order. Sets `status = 'cancelled'`, restores product stock balances to inventory, preserves order record for audit history, and returns `200 OK`.
 
+---
 
+#### 5. System & Health Monitoring
+
+##### `GET /`
+- **Auth**: None (Public)
+- **Description**: Returns basic service metadata, version, and online status.
+- **Response Payload (`200 OK`)**:
+  ```json
+  {
+    "name": "RevoFashion API",
+    "version": "1.0",
+    "checkpoint": 2,
+    "status": "online"
+  }
+  ```
+
+##### `GET /health`
+- **Auth**: None (Public)
+- **Description**: Database connectivity and service health check designed for deployment liveness and readiness probes (Render, Railway, Fly.io, Kubernetes, AWS).
+- **Response Payload (`200 OK` - Healthy)**:
+  ```json
+  {
+    "status": "healthy",
+    "database": "connected",
+    "timestamp": "2026-08-19T06:56:00.000000+00:00"
+  }
+  ```
+- **Response Payload (`503 Service Unavailable` - Unhealthy)**:
+  ```json
+  {
+    "status": "unhealthy",
+    "database": "disconnected: <error_message>",
+    "timestamp": "2026-08-19T06:56:00.000000+00:00"
+  }
+  ```
 
 ---
 

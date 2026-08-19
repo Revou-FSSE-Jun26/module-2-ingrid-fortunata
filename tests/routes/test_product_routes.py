@@ -75,3 +75,38 @@ def test_delete_product_conflict_when_ordered(client, admin_headers):
 
     data = response.get_json()
     assert data["error_code"] == "PRODUCT_CONFLICT"
+
+
+def test_admin_update_product_partial_stock_only(client, admin_headers):
+    """Verify admin can perform partial update on a product (e.g. stock only)."""
+    # 1. Create a product first
+    create_payload = {
+        "name": "Partial Update Test Shirt",
+        "price": 25.00,
+        "stock": 10,
+        "color": "White"
+    }
+    create_res = client.post('/products', json=create_payload, headers=admin_headers)
+    assert create_res.status_code == 201
+    prod_id = create_res.get_json()["data"]["id"]
+
+    # 2. Update stock only via PUT
+    update_res = client.put(f'/products/{prod_id}', json={"stock": 55}, headers=admin_headers)
+    assert update_res.status_code == 200
+    updated_data = update_res.get_json()["data"]
+
+    # Verify stock changed, but other fields remain untouched
+    assert updated_data["stock"] == 55
+    assert updated_data["name"] == "Partial Update Test Shirt"
+    assert updated_data["price"] == 25.00
+    assert updated_data["color"] == "White"
+
+    # 3. Clean up
+    client.delete(f'/products/{prod_id}', headers=admin_headers)
+
+
+def test_admin_update_product_empty_body_fails(client, admin_headers):
+    """Verify updating product with empty payload returns 422 validation error."""
+    response = client.put('/products/1', json={}, headers=admin_headers)
+    assert response.status_code == 422
+    assert response.get_json()["error_code"] == "VALIDATION_ERROR"

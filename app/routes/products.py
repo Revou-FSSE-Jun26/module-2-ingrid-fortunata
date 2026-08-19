@@ -265,8 +265,8 @@ def create_product(product_data):
 @products_bp.arguments(ProductUpdateInputSchema, location='json')
 @products_bp.response(200, ProductDetailResponseSchema)
 def update_product(product_data, id):
-    """Replace/update an entire product and its images.
-    Under RESTful PUT semantics, the client provides the full product representation to replace the existing resource.
+    """Update a product and its images (supports partial payload update).
+    Only provided fields in the request body will be updated. Existing fields and images are preserved if omitted.
     """
     product = db.session.get(Product, id)
     if not product:
