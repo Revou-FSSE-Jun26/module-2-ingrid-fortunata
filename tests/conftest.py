@@ -41,3 +41,15 @@ def customer_headers(client):
     assert res.status_code == 200, f"Customer login failed: {data}"
     token = data['data']['token']
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def superadmin_headers(client):
+    """Returns Bearer authorization headers for the seeded superadmin user."""
+    payload = {"username": "superadmin_user", "password": "superadmin_password"}
+    res = client.post('/auth/login', json=payload)
+    data = res.get_json()
+    assert res.status_code == 200, f"Superadmin login failed: {data}"
+    token = data['data']['token']
+    return {"Authorization": f"Bearer {token}"}
+

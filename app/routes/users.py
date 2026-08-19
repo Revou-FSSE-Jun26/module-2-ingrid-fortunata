@@ -1,9 +1,10 @@
 from flask_smorest import Blueprint
-from flask import jsonify
+from flask import jsonify, request
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.user import User
+from app.auth import roles_required
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app.schemas import (
@@ -11,10 +12,13 @@ from app.schemas import (
     UserRegisterResponseSchema,
     UserLoginInputSchema,
     UserGetResponseSchema,
+    UserListResponseSchema,
+    UserUpdateInputSchema,
     AuthLoginResponseSchema,
 )
 
 users_bp = Blueprint('users', __name__, description='Operations on users')
+
 
 
 @users_bp.route('/users', methods=['POST'])
@@ -69,6 +73,47 @@ def register_user(user_data):
     }), 201
 
 
+@users_bp.route('/users', methods=['GET'])
+@roles_required('superadmin')
+@users_bp.response(200, UserListResponseSchema)
+def get_all_users():
+    """Retrieve all users with optional filtering and pagination.
+    Restricted strictly to superadmin.
+    """
+    role = request.args.get('role', None)
+    is_active_raw = request.args.get('is_active', None)
+    search = request.args.get('search', None)
+
+    query = User.query.order_by(User.id.asc())
+
+    if role:
+        query = query.filter(func.lower(User.role) == role.strip().lower())
+
+    if is_active_raw is not None:
+        val = is_active_raw.strip().lower()
+        if val in ['true', '1']:
+            query = query.filter(User.is_active.is_(True))
+        elif val in ['false', '0']:
+            query = query.filter(User.is_active.is_(False))
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(User.username.ilike(search_term) | User.email.ilike(search_term))
+
+    raw_page = request.args.get('page', None, type=int)
+    raw_per_page = request.args.get('per_page', None, type=int)
+
+    page = max(1, raw_page) if raw_page is not None else 1
+    per_page = min(100, max(1, raw_per_page)) if raw_per_page is not None else 10
+
+    offset = (page - 1) * per_page
+    users = query.offset(offset).limit(per_page).all()
+
+    return jsonify({
+        'data': [u.to_dict() for u in users]
+    }), 200
+
+
 @users_bp.route('/users/<int:id>', methods=['GET'])
 @jwt_required()
 @users_bp.response(200, UserGetResponseSchema)
@@ -102,6 +147,102 @@ def get_user_by_id(id):
     return jsonify({
         'data': user.to_dict()
     }), 200
+
+
+@users_bp.route('/users/<int:id>', methods=['PUT'])
+@jwt_required()
+@users_bp.arguments(UserUpdateInputSchema, location='json')
+@users_bp.response(200, UserGetResponseSchema)
+def update_user_by_id(user_data, id):
+    """Update user profile.
+    Customers can update only their own username and email.
+    Superadmins can update any user's profile, including role and is_active.
+    """
+    requester_id = int(get_jwt_identity())
+    requester = db.session.get(User, requester_id)
+    if not requester:
+        return jsonify({
+            'error_code': 'USER_NOT_FOUND',
+            'message': 'Authenticated user not found.'
+        }), 401
+
+    if not requester.is_active:
+        return jsonify({
+            'error_code': 'USER_DEACTIVATED',
+            'message': 'Account is deactivated.'
+        }), 403
+
+    is_superadmin = (requester.role == 'superadmin')
+
+    # Non-superadmins can only update their own profile
+    if not is_superadmin and requester_id != id:
+        return jsonify({
+            'error_code': 'USER_FORBIDDEN',
+            'message': 'You do not have permission to update this profile.'
+        }), 403
+
+    # Non-superadmins cannot modify role or is_active
+    if not is_superadmin and ('role' in user_data or 'is_active' in user_data):
+        return jsonify({
+            'error_code': 'USER_FORBIDDEN',
+            'message': 'Only superadmin can update role and is_active.'
+        }), 403
+
+    user = db.session.get(User, id)
+    if not user:
+        return jsonify({
+            'error_code': 'USER_NOT_FOUND',
+            'message': f'User with ID {id} not found.'
+        }), 404
+
+    # Validate and apply username update
+    if 'username' in user_data:
+        username = user_data['username'].strip()
+        conflict = User.query.filter(func.lower(User.username) == username.lower(), User.id != id).first()
+        if conflict:
+            return jsonify({
+                'error_code': 'USER_NAME_CONFLICT',
+                'message': 'Username already exists.'
+            }), 409
+        user.username = username
+
+    # Validate and apply email update
+    if 'email' in user_data:
+        email = user_data['email'].strip().lower()
+        conflict = User.query.filter(func.lower(User.email) == email.lower(), User.id != id).first()
+        if conflict:
+            return jsonify({
+                'error_code': 'USER_EMAIL_CONFLICT',
+                'message': 'Email already exists.'
+            }), 409
+        user.email = email
+
+    # Superadmin-only updates
+    if is_superadmin:
+        if 'role' in user_data:
+            user.role = user_data['role'].strip().lower()
+        if 'is_active' in user_data:
+            user.is_active = user_data['is_active']
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            'error_code': 'USER_CONFLICT',
+            'message': 'Username or email already exists.'
+        }), 409
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            'error_code': 'USER_DATABASE_ERROR',
+            'message': 'An error occurred while updating the user.'
+        }), 500
+
+    return jsonify({
+        'data': user.to_dict()
+    }), 200
+
 
 
 @users_bp.route('/auth/login', methods=['POST'])
