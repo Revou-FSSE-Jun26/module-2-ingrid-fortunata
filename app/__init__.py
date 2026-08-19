@@ -1,4 +1,6 @@
+from datetime import datetime, timezone
 from flask import Flask, jsonify
+from sqlalchemy import text
 from app.config import Config
 from app.extensions import db, migrate, api, jwt
 
@@ -105,5 +107,24 @@ def create_app(config_class=Config):
             "checkpoint": 2,
             "status": "online"
         }
+
+    @flask_app.route('/health', methods=['GET'])
+    def health_check():
+        try:
+            db.session.execute(text('SELECT 1'))
+            db_status = "connected"
+        except Exception as e:
+            db_status = f"disconnected: {str(e)}"
+            return {
+                "status": "unhealthy",
+                "database": db_status,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }, 503
+
+        return {
+            "status": "healthy",
+            "database": db_status,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }, 200
 
     return flask_app
