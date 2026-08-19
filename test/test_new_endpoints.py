@@ -402,7 +402,104 @@ class NewEndpointsTestCase(unittest.TestCase):
             db.session.commit()
         self.client.delete(f'/products/{bag_id}', headers=admin_headers)
 
+    def test_duplicate_order_items_validation_and_multi_products(self):
+        """Test that duplicate product_id in items returns 422, while distinct products succeed."""
+        customer_headers = self._get_customer_headers()
+
+        # 1. Duplicate product_id 1 in items -> rejected with 422
+        dup_payload = {
+            "items": [
+                {"product_id": 1, "quantity": 1},
+                {"product_id": 1, "quantity": 2}
+            ],
+            "shipping_address": "Jl. Sudirman No. 1, Jakarta",
+            "recipient_name": "Alice Smith",
+            "recipient_phone": "+62 812-3456-7890"
+        }
+        res = self.client.post('/orders', json=dup_payload, headers=customer_headers)
+        self.assertEqual(res.status_code, 422)
+        err = res.get_json()
+        self.assertEqual(err['error_code'], 'VALIDATION_ERROR')
+
+        # 2. Distinct products (product_id: 1 and product_id: 2) -> succeeds with 201
+        multi_payload = {
+            "items": [
+                {"product_id": 1, "quantity": 1},
+                {"product_id": 2, "quantity": 1}
+            ],
+            "shipping_address": "Jl. Sudirman No. 1, Jakarta",
+            "recipient_name": "Alice Smith",
+            "recipient_phone": "+62 812-3456-7890"
+        }
+        res_multi = self.client.post('/orders', json=multi_payload, headers=customer_headers)
+        self.assertEqual(res_multi.status_code, 201)
+        created = res_multi.get_json()['data']
+        self.assertEqual(len(created['items']), 2)
+
+        # Cleanup created test order
+        self.client.delete(f"/orders/{created['id']}", headers=customer_headers)
+
+    def test_product_deletion_active_vs_completed_order_policy(self):
+        """Test that active orders block product deletion (409), while finished orders allow soft-delete (204)."""
+        admin_headers = self._get_admin_headers()
+        customer_headers = self._get_customer_headers()
+
+        # 1. Create a temporary product
+        create_res = self.client.post('/products', json={
+            "name": "Smart Delete Test Shirt",
+            "price": 25.50,
+            "stock": 100,
+            "color": "Gray"
+        }, headers=admin_headers)
+        self.assertEqual(create_res.status_code, 201)
+        test_prod_id = create_res.get_json()['data']['id']
+
+        # 2. Place an order on this product (status: 'pending' -> ACTIVE)
+        order_res = self.client.post('/orders', json={
+            "items": [{"product_id": test_prod_id, "quantity": 1}],
+            "shipping_address": "Jl. Merdeka No. 10, Jakarta",
+            "recipient_name": "Test Recipient",
+            "recipient_phone": "+62 811-2233-4455"
+        }, headers=customer_headers)
+        self.assertEqual(order_res.status_code, 201)
+        test_order_id = order_res.get_json()['data']['id']
+
+        # 3. Attempt to delete product while order is ACTIVE -> blocked with 409
+        del_active_res = self.client.delete(f'/products/{test_prod_id}', headers=admin_headers)
+        self.assertEqual(del_active_res.status_code, 409)
+        self.assertEqual(del_active_res.get_json()['error_code'], 'PRODUCT_CONFLICT')
+
+        # 4. Cancel the order (status becomes 'cancelled' -> FINISHED)
+        cancel_res = self.client.delete(f'/orders/{test_order_id}', headers=customer_headers)
+        self.assertEqual(cancel_res.status_code, 200)
+
+        # 5. Now delete product -> succeeds with 204 (soft-deleted / deactivated)
+        del_finished_res = self.client.delete(f'/products/{test_prod_id}', headers=admin_headers)
+        self.assertEqual(del_finished_res.status_code, 204)
+
+        # Verify product is soft-deleted (is_active = False)
+        from app.models.product import Product
+        prod_in_db = db.session.get(Product, test_prod_id)
+        self.assertIsNotNone(prod_in_db)
+        self.assertFalse(prod_in_db.is_active)
+
+        # 6. Unordered product hard-delete test
+        create_res2 = self.client.post('/products', json={
+            "name": "Hard Delete Product",
+            "price": 10.00,
+            "stock": 10,
+            "color": "Green"
+        }, headers=admin_headers)
+        self.assertEqual(create_res2.status_code, 201)
+        test_prod_id2 = create_res2.get_json()['data']['id']
+
+        del_hard_res = self.client.delete(f'/products/{test_prod_id2}', headers=admin_headers)
+        self.assertEqual(del_hard_res.status_code, 204)
+        self.assertIsNone(db.session.get(Product, test_prod_id2))
+
+
 if __name__ == '__main__':
     unittest.main()
+
 
 

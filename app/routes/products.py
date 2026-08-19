@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.product import Product, ProductImage
 from app.models.category import Category
-from app.models.order import order_items
+from app.models.order import Order, order_items
 from app.auth import roles_required
 from app.schemas import (
     ProductListResponseSchema,
@@ -276,7 +276,11 @@ def update_product(product_data, id):
 @products_bp.route('/products/<int:id>', methods=['DELETE'])
 @roles_required('superadmin', 'admin')
 def delete_product(id):
-    """Delete a product, blocked if linked to any orders."""
+    """Delete a product.
+    - If linked to ACTIVE in-progress orders ('pending', 'paid', 'processing', 'shipped'): blocked with 409 Conflict.
+    - If linked ONLY to completed/cancelled orders ('delivered', 'cancelled'): soft-deleted (is_active = False) with 204.
+    - If never ordered: hard-deleted with 204.
+    """
     product = db.session.get(Product, id)
     if not product:
         return jsonify({
@@ -284,16 +288,35 @@ def delete_product(id):
             "message": f"Product with ID {id} not found."
         }), 404
 
-    has_orders = db.session.query(order_items).filter_by(product_id=id).first() is not None
-    if has_orders:
+    # Check for active in-progress orders
+    active_orders_count = db.session.query(order_items).join(
+        Order, order_items.c.order_id == Order.id
+    ).filter(
+        order_items.c.product_id == id,
+        Order.status.in_(['pending', 'paid', 'processing', 'shipped'])
+    ).count()
+
+    if active_orders_count > 0:
         return jsonify({
             "error_code": "PRODUCT_CONFLICT",
-            "message": "Cannot delete product because it is linked to existing orders."
+            "message": (
+                f"Cannot delete product because it is linked to {active_orders_count} active in-progress order(s). "
+                "Complete or cancel those orders first."
+            )
         }), 409
 
+    # Check if referenced in historical orders
+    has_any_orders = db.session.query(order_items).filter_by(product_id=id).first() is not None
+
     try:
-        db.session.delete(product)
-        db.session.commit()
+        if has_any_orders:
+            # Soft-delete: deactivate from catalog so historical order items and DB foreign keys remain intact
+            product.is_active = False
+            db.session.commit()
+        else:
+            # Hard-delete: safe to remove completely
+            db.session.delete(product)
+            db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
         return jsonify({

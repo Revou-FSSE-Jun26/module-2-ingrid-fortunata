@@ -1,6 +1,7 @@
 from flask_smorest import Blueprint
 from flask import jsonify
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.orm import selectinload
 from app.extensions import db
 from app.models.category import Category
 from app.models.product import Product
@@ -68,7 +69,7 @@ def get_categories():
 @categories_bp.response(200, CategoryWithProductsResponseSchema)
 def get_category_by_id(id):
     """Get a specific category along with its active products."""
-    category = db.session.get(Category, id)
+    category = Category.query.options(selectinload(Category.products)).filter_by(id=id).first()
     if not category:
         return jsonify({
             "error_code": "CATEGORY_NOT_FOUND",
@@ -76,7 +77,7 @@ def get_category_by_id(id):
         }), 404
 
     cat_dict = category.to_dict()
-    cat_dict['products'] = [p.to_dict() for p in category.products]
+    cat_dict['products'] = [p.to_dict() for p in category.products if p.is_active]
     return jsonify({
         "data": cat_dict
     }), 200

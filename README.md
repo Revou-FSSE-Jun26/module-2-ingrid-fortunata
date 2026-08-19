@@ -638,7 +638,12 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 
 ##### `DELETE /products/<id>`
 - **Auth**: JWT Required (`superadmin`, `admin`)
-- **Description**: Delete a product. Blocked with `409 Conflict` if the product is referenced in historical order records.
+- **Description**: Delete a product based on order status policy:
+  | Product Order History | Action Taken | Response Code | Description |
+  | :--- | :--- | :---: | :--- |
+  | **Has Active Orders** (`pending`, `paid`, `processing`, `shipped`) | **Blocked** | `409 Conflict` | Cannot delete product while orders are in progress. |
+  | **Has Only Finished Orders** (`delivered`, `cancelled`) | **Soft-Delete** | `204 No Content` | Marks `is_active = false`, retiring it from the public catalog while preserving historical purchase records & DB foreign keys. |
+  | **Never Ordered** | **Hard-Delete** | `204 No Content` | Completely removes product and images from database. |
 
 ---
 
@@ -703,6 +708,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 - **Field Validation**:
   | Field | Validation |
   | :--- | :--- |
+  | `items` | Required, non-empty list. Duplicate `product_id`s within the same order are rejected (`422`). Distinct products (e.g. Size M + Size L) are accepted. |
   | `shipping_address` | Required, min 5 chars, non-blank |
   | `recipient_name` | Required, non-blank |
   | `recipient_phone` | Required, digits/spaces/dashes/parens, 7–20 chars (e.g. `+62 812-3456-7890`) |

@@ -54,6 +54,15 @@ class OrderCreateInputSchema(Schema):
     def validate_items(self, value, **kwargs):
         if not value:
             raise ValidationError("Order must contain at least one item.")
+        
+        seen_product_ids = set()
+        for item in value:
+            prod_id = item.get("product_id")
+            if prod_id in seen_product_ids:
+                raise ValidationError(
+                    f"Duplicate product_id {prod_id} found. Please consolidate quantities into a single item."
+                )
+            seen_product_ids.add(prod_id)
 
     @validates("recipient_phone")
     def validate_phone_format(self, value, **kwargs):
