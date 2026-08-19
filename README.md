@@ -173,6 +173,7 @@ JOIN products p ON oi.product_id = p.id;
 - ✅ **Order Lifecycle & State Machine**: Status transitions (`pending` → `paid` → `processing` → `shipped` → `delivered` or `cancelled`) with role enforcement.
 - ✅ **Automated Stock Control**: Stock is decremented on order placement and restored upon order cancellation.
 - ✅ **Soft-Cancel Order Deletion**: `DELETE /orders/<id>` performs a soft cancel (restores stock, sets status to `cancelled`, preserves audit row).
+- ✅ **Consistent Error Responses**: All API errors — including schema validation failures (422), JWT issues, and server errors — return a unified `{error_code, message}` JSON shape via global error handlers.
 - ✅ **OpenAPI 3.0 / Swagger UI**: Auto-generated interactive API docs via `Flask-Smorest` and `marshmallow`.
 
 ---
@@ -447,13 +448,15 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
   }
   ```
 - **Standard Validation Error Structure (422 Unprocessable Entity)**:
+  All schema validation failures return a consistent structured response:
   ```json
   {
-    "code": 422,
-    "status": "Unprocessable Entity",
-    "errors": {
+    "error_code": "VALIDATION_ERROR",
+    "message": "Request body failed validation.",
+    "details": {
       "json": {
-        "price": ["Price must be greater than zero."]
+        "price": ["Price must be greater than zero."],
+        "color": ["Field cannot be blank or whitespace only."]
       }
     }
   }
@@ -501,8 +504,8 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
   | Field | Type | Required | Validation / Options |
   | :--- | :--- | :---: | :--- |
   | `username` | String | Optional* | Account username (*Must provide either `username` or `email`) |
-  | `email` | String | Optional* | Account email address |
-  | `password` | String | **Required** | Plain-text account password |
+  | `email` | String | Optional* | Valid email format |
+  | `password` | String | **Required** | Plain-text account password, non-blank |
 - **Success Response (`200 OK`)**:
   ```json
   {
@@ -519,20 +522,32 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
     }
   }
   ```
+- **Error Responses**:
+  | Status | `error_code` | Reason |
+  | :--- | :--- | :--- |
+  | `401 Unauthorized` | `USER_UNAUTHORIZED` | Wrong credentials, user not found, or account deactivated |
+  | `422 Unprocessable Entity` | `VALIDATION_ERROR` | Missing required fields (e.g., no password, no username/email) |
+
+  > ⚠️ **Security note**: Deactivated accounts return `401` (same as wrong credentials) — not `403` — to prevent leaking account state to unauthorized callers.
 
 ---
 
 ##### `POST /users`
 - **Auth**: None
-- **Description**: Register a new user account.
+- **Description**: Register a new user account. All public registrations default to the `customer` role. Role assignment is a privileged admin operation and cannot be set through this endpoint.
 - **Request Body Payload**:
-  | Field | Type | Required | Options / Enums |
+  | Field | Type | Required | Options / Validation |
   | :--- | :--- | :---: | :--- |
-  | `username` | String | **Required** | Unique username |
-  | `email` | String | **Required** | Unique email address |
-  | `password` | String | **Required** | Account password |
-  | `role` | String | Optional | Options: `superadmin`, `admin`, `customer` (Default: `customer`) |
+  | `username` | String | **Required** | Unique, no spaces, non-blank |
+  | `email` | String | **Required** | Valid email format, unique |
+  | `password` | String | **Required** | Minimum 6 characters, non-blank |
 - **Success Response (`201 Created`)**: Returns created user profile.
+- **Error Responses**:
+  | Status | `error_code` | Reason |
+  | :--- | :--- | :--- |
+  | `409 Conflict` | `USER_NAME_CONFLICT` | Username already registered |
+  | `409 Conflict` | `USER_EMAIL_CONFLICT` | Email already registered |
+  | `422 Unprocessable Entity` | `VALIDATION_ERROR` | Field validation failed (e.g., blank password) |
 
 ---
 
@@ -557,7 +572,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
   | `material` | String | Case-insensitive substring | Filter by fabric (e.g., `Cotton`) |
   | `search` | String | Free-text string | Search across product `name` and `description` |
   | `page` | Integer | Min `1` | Page number for pagination |
-  | `per_page` | Integer | Min `1` (Default: `10`) | Items per page |
+  | `per_page` | Integer | Min `1`, Max `100` (Default: `10`) | Items per page |
 - **Success Response (`200 OK`)**:
   ```json
   {
@@ -623,7 +638,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 
 ##### `DELETE /products/<id>`
 - **Auth**: JWT Required (`superadmin`, `admin`)
-- **Description**: Delete a product. Blocked with `400 Bad Request` if product is referenced in historical orders.
+- **Description**: Delete a product. Blocked with `409 Conflict` if the product is referenced in historical order records.
 
 ---
 
@@ -640,12 +655,15 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 ##### `POST /categories`
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Request Payload**: `{"name": "Outerwear", "description": "Jackets & Coats", "is_active": true}`
+- **Validation**: `name` must be non-blank and unique. Returns `409 Conflict` if name already exists.
 
 ##### `PUT /categories/<id>`
 - **Auth**: JWT Required (`superadmin`, `admin`)
+- **Validation**: `name` must be non-blank. Returns `409 Conflict` if new name already exists. Empty body (`{}`) returns `422`.
 
 ##### `DELETE /categories/<id>`
 - **Auth**: JWT Required (`superadmin`, `admin`)
+- **Description**: Delete a category. **Blocked with `409 Conflict`** if the category has active products linked to it. Reassign or deactivate those products first.
 
 ---
 
@@ -676,12 +694,22 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
       {
         "product_id": 1,
         "quantity": 2,
-        "size": "M",  // Optional (defaults to product size if omitted)
-        "color": "White"  // Optional (defaults to product color if omitted)
+        "size": "M",
+        "color": "White"
       }
     ]
   }
   ```
+- **Field Validation**:
+  | Field | Validation |
+  | :--- | :--- |
+  | `shipping_address` | Required, min 5 chars, non-blank |
+  | `recipient_name` | Required, non-blank |
+  | `recipient_phone` | Required, digits/spaces/dashes/parens, 7–20 chars (e.g. `+62 812-3456-7890`) |
+  | `items[].product_id` | Required, must be `>= 1` |
+  | `items[].quantity` | Required, must be `>= 1` |
+  | `items[].size` | Optional — must be one of the valid sizes if provided |
+  | `items[].color` | Optional — non-blank if provided |
 - **Success Response (`201 Created`)**: Returns created order object.
 
 ---
