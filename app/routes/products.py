@@ -9,6 +9,7 @@ from app.models.order import Order, order_items
 from app.auth import roles_required, is_admin_user
 from app.errors import error_response, not_found_response, conflict_response
 from app.validators import validate_product_category, validate_product_deletion
+from app.utils.pagination import get_page_params
 from app.schemas import (
     ProductListResponseSchema,
     ProductCreateInputSchema,
@@ -17,11 +18,6 @@ from app.schemas import (
 )
 
 products_bp = Blueprint('products', __name__, description='Operations on products')
-
-# Pagination defaults and limits
-PAGE_DEFAULT = 1
-PER_PAGE_DEFAULT = 10
-PER_PAGE_MAX = 100
 
 
 def generate_unique_sku():
@@ -32,17 +28,24 @@ def generate_unique_sku():
             return sku_candidate
 
 
-def _safe_page_params():
-    """Parse and clamp pagination query params. Returns (page, per_page) or (None, None)."""
-    raw_page = request.args.get('page', None, type=int)
-    raw_per_page = request.args.get('per_page', None, type=int)
+def save_product_images(product_id: int, images_data: list, replace: bool = False):
+    """Saves or replaces images for a product, ensuring exactly one primary image."""
+    if replace:
+        ProductImage.query.filter_by(product_id=product_id).delete()
 
-    if raw_page is None and raw_per_page is None:
-        return None, None
+    if not images_data:
+        return
 
-    page = max(PAGE_DEFAULT, raw_page) if raw_page is not None else PAGE_DEFAULT
-    per_page = min(PER_PAGE_MAX, max(1, raw_per_page)) if raw_per_page is not None else PER_PAGE_DEFAULT
-    return page, per_page
+    if not any(img.get('is_primary') for img in images_data):
+        images_data[0]['is_primary'] = True
+
+    for img_obj in images_data:
+        new_img = ProductImage(
+            product_id=product_id,
+            image_base64=img_obj['image_base64'],
+            is_primary=img_obj.get('is_primary', False)
+        )
+        db.session.add(new_img)
 
 
 @products_bp.route('/products', methods=['GET'])
@@ -145,7 +148,7 @@ def get_all_products():
         products_query = products_query.order_by(Product.updated_at.desc(), Product.id.desc())
 
     # Pagination (clamped)
-    page, per_page = _safe_page_params()
+    page, per_page = get_page_params()
 
     if page is not None:
         pagination = products_query.paginate(page=page, per_page=per_page, error_out=False)
@@ -224,17 +227,7 @@ def create_product(product_data):
         db.session.add(new_product)
         db.session.flush()  # get new_product.id before commit
 
-        if images_data:
-            if not any(img.get('is_primary') for img in images_data):
-                images_data[0]['is_primary'] = True
-
-            for img_obj in images_data:
-                new_img = ProductImage(
-                    product_id=new_product.id,
-                    image_base64=img_obj['image_base64'],
-                    is_primary=img_obj.get('is_primary', False)
-                )
-                db.session.add(new_img)
+        save_product_images(new_product.id, images_data, replace=False)
 
         db.session.commit()  # single atomic commit for product + images
 
@@ -272,18 +265,7 @@ def update_product(product_data, id):
             setattr(product, key, val)
 
         if images_data is not None:
-            ProductImage.query.filter_by(product_id=id).delete()
-            if images_data:
-                if not any(img.get('is_primary') for img in images_data):
-                    images_data[0]['is_primary'] = True
-
-                for img_obj in images_data:
-                    new_img = ProductImage(
-                        product_id=id,
-                        image_base64=img_obj['image_base64'],
-                        is_primary=img_obj.get('is_primary', False)
-                    )
-                    db.session.add(new_img)
+            save_product_images(id, images_data, replace=True)
 
         db.session.commit()  # single atomic commit for product + images
 

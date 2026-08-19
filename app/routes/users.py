@@ -5,7 +5,6 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.user import User
 from app.auth import roles_required
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app.schemas import (
     UserRegisterInputSchema,
@@ -19,6 +18,7 @@ from app.schemas import (
 
 from app.errors import error_response, not_found_response, forbidden_response, unauthorized_response, conflict_response
 from app.validators import validate_user_registration, validate_user_update
+from app.utils.pagination import get_page_params
 
 users_bp = Blueprint('users', __name__, description='Operations on users')
 
@@ -38,14 +38,12 @@ def register_user(user_data):
     if err:
         return err
 
-    password_hash = generate_password_hash(raw_password)
-
     new_user = User(
         username=username,
         email=email,
-        password_hash=password_hash,
         role='customer'   # hardcoded — public registration cannot choose role
     )
+    new_user.set_password(raw_password)
 
     try:
         db.session.add(new_user)
@@ -204,18 +202,7 @@ def login_auth(login_data):
     if not user or not user.is_active:
         return error_response('USER_UNAUTHORIZED', 'Invalid username/email or password.', 401)
 
-    # Verify password
-    is_password_correct = False
-    if user.password_hash.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
-        try:
-            is_password_correct = check_password_hash(user.password_hash, password)
-        except ValueError:
-            is_password_correct = False
-    else:
-        # Plaintext fallback for legacy/test users
-        is_password_correct = (user.password_hash == password)
-
-    if not is_password_correct:
+    if not user.check_password(password):
         return error_response('USER_UNAUTHORIZED', 'Invalid username/email or password.', 401)
 
     token = create_access_token(identity=str(user.id))
