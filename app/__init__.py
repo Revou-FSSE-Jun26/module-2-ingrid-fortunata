@@ -1,6 +1,7 @@
-from flask import Flask
+from flask import Flask, jsonify
 from app.config import Config
 from app.extensions import db, migrate, api, jwt
+
 
 def create_app(config_class=Config):
     flask_app = Flask(__name__)
@@ -26,6 +27,75 @@ def create_app(config_class=Config):
     api.register_blueprint(categories_bp)
     api.register_blueprint(orders_bp)
 
+    # ------------------------------------------------------------------ #
+    # Global HTTP error handlers                                           #
+    # Ensures ALL error responses use the same {error_code, message} shape #
+    # ------------------------------------------------------------------ #
+
+    @flask_app.errorhandler(400)
+    def handle_bad_request(err):
+        """Malformed JSON or bad syntax in request body."""
+        return jsonify({
+            "error_code": "BAD_REQUEST",
+            "message": "The request body is malformed or contains invalid JSON."
+        }), 400
+
+    @flask_app.errorhandler(404)
+    def handle_not_found(err):
+        """Route / resource not found."""
+        return jsonify({
+            "error_code": "NOT_FOUND",
+            "message": "The requested resource or endpoint does not exist."
+        }), 404
+
+    @flask_app.errorhandler(405)
+    def handle_method_not_allowed(err):
+        """HTTP method not allowed on this endpoint."""
+        return jsonify({
+            "error_code": "METHOD_NOT_ALLOWED",
+            "message": "The HTTP method used is not allowed for this endpoint."
+        }), 405
+
+    @flask_app.errorhandler(422)
+    def handle_unprocessable_entity(err):
+        """Flask-Smorest / Marshmallow validation failure (schema errors)."""
+        # err.data is set by flask-smorest when it raises a 422
+        messages = getattr(err, "data", {}).get("messages", {})
+        return jsonify({
+            "error_code": "VALIDATION_ERROR",
+            "message": "Request body failed validation.",
+            "details": messages
+        }), 422
+
+    @flask_app.errorhandler(500)
+    def handle_internal_error(err):
+        """Unhandled server error fallback."""
+        return jsonify({
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred. Please try again later."
+        }), 500
+
+    # JWT error handlers — consistent shape for token issues
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return jsonify({
+            "error_code": "TOKEN_EXPIRED",
+            "message": "Your access token has expired. Please log in again."
+        }), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(reason):
+        return jsonify({
+            "error_code": "TOKEN_INVALID",
+            "message": f"Invalid token: {reason}."
+        }), 401
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(reason):
+        return jsonify({
+            "error_code": "TOKEN_MISSING",
+            "message": "Authorization token is missing. Please include a Bearer token."
+        }), 401
 
     @flask_app.route('/')
     def index():
@@ -37,4 +107,3 @@ def create_app(config_class=Config):
         }
 
     return flask_app
-

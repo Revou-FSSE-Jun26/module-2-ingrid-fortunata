@@ -61,22 +61,22 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_03_login_validation_errors(self):
-        """POST /auth/login should return 400 when identity or password is missing."""
-        # Missing password
+        """POST /auth/login should return 422 when identity or password is missing (schema validation)."""
+        # Missing password — schema rejects it as required field
         response = self.client.post(
             '/auth/login',
             data=json.dumps({"username": "alice_smith"}),
             content_type='application/json'
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
-        # Missing identity
+        # Missing identity (neither username nor email) — @validates_schema fires
         response = self.client.post(
             '/auth/login',
             data=json.dumps({"password": "password"}),
             content_type='application/json'
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
     def test_04_login_success_username(self):
         """POST /auth/login succeeds using username (hashed password check)."""
@@ -168,7 +168,10 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_08_login_failed_deactivated_user(self):
-        """POST /auth/login fails with 403 Forbidden for deactivated users."""
+        """POST /auth/login returns 401 for deactivated users.
+        We intentionally return 401 (not 403) to prevent account-state leakage:
+        revealing 403 would confirm the password was correct for a deactivated account.
+        """
         payload = {
             "username": "deactivated_user",
             "password": "deactivated_password"
@@ -178,10 +181,10 @@ class ActiveFlaggingAndLoginTestCase(unittest.TestCase):
             data=json.dumps(payload),
             content_type='application/json'
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertEqual(data['error_code'], 'USER_FORBIDDEN')
-        self.assertEqual(data['message'], 'Account is deactivated.')
+        self.assertEqual(data['error_code'], 'USER_UNAUTHORIZED')
+        self.assertEqual(data['message'], 'Invalid username/email or password.')
 
 if __name__ == '__main__':
     unittest.main()

@@ -16,6 +16,12 @@ from app.schemas import (
 
 products_bp = Blueprint('products', __name__, description='Operations on products')
 
+# Pagination defaults and limits
+PAGE_DEFAULT = 1
+PER_PAGE_DEFAULT = 10
+PER_PAGE_MAX = 100
+
+
 def generate_unique_sku():
     """Generates a random unique SKU code with prefix UQ-."""
     while True:
@@ -23,11 +29,26 @@ def generate_unique_sku():
         if not Product.query.filter_by(sku=sku_candidate).first():
             return sku_candidate
 
+
+def _safe_page_params():
+    """Parse and clamp pagination query params. Returns (page, per_page) or (None, None)."""
+    raw_page = request.args.get('page', None, type=int)
+    raw_per_page = request.args.get('per_page', None, type=int)
+
+    if raw_page is None and raw_per_page is None:
+        return None, None
+
+    page = max(PAGE_DEFAULT, raw_page) if raw_page is not None else PAGE_DEFAULT
+    per_page = min(PER_PAGE_MAX, max(1, raw_per_page)) if raw_per_page is not None else PER_PAGE_DEFAULT
+    return page, per_page
+
+
 @products_bp.route('/products', methods=['GET'])
 @products_bp.response(200, ProductListResponseSchema)
 def get_all_products():
-    """Returns a paginated list of active products whose category is also active (or uncategorized) from the database.
+    """Returns a paginated list of active products whose category is also active (or uncategorized).
     Supports optional filters: ?gender=Women&size=M&color=Black
+    Pagination: ?page=1&per_page=10 (max per_page=100)
     """
     # Subquery to select the base64 content of primary image
     primary_image_subquery = db.session.query(
@@ -37,7 +58,7 @@ def get_all_products():
         ProductImage.is_primary == True
     ).subquery()
 
-    # Build query (without .all() so paginate() can be applied)
+    # Build base query
     products_query = db.session.query(
         Product,
         primary_image_subquery.c.image_base64.label('primary_image')
@@ -78,15 +99,11 @@ def get_all_products():
             )
         )
 
-    # Pagination
-    page = request.args.get('page', None, type=int)
-    per_page = request.args.get('per_page', None, type=int)
+    # Pagination (clamped)
+    page, per_page = _safe_page_params()
 
-    if page is not None or per_page is not None:
-        page = page or 1
-        per_page = per_page or 10
+    if page is not None:
         pagination = products_query.paginate(page=page, per_page=per_page, error_out=False)
-
         data = []
         for prod, primary_image in pagination.items:
             d = prod.to_dict()
@@ -101,7 +118,7 @@ def get_all_products():
             "pages": pagination.pages
         }), 200
 
-    # Default: return all matching products
+    # Default: return all matching products (no pagination)
     results = products_query.all()
     data = []
     for prod, primary_image in results:
@@ -109,14 +126,13 @@ def get_all_products():
         d['primary_image'] = primary_image
         data.append(d)
 
-    return jsonify({
-        "data": data
-    }), 200
+    return jsonify({"data": data}), 200
+
 
 @products_bp.route('/products/<int:id>', methods=['GET'])
 @products_bp.response(200, ProductDetailResponseSchema)
 def get_product_by_id(id):
-    """Retrieves a single active product by ID from the database along with all images."""
+    """Retrieves a single active product by ID along with all images."""
     product = Product.query.join(
         Category, Product.category_id == Category.id, isouter=True
     ).filter(
@@ -128,15 +144,14 @@ def get_product_by_id(id):
     if not product:
         return jsonify({
             "error_code": "PRODUCT_NOT_FOUND",
-            "message": f"No product exists with ID {id}"
+            "message": f"No product exists with ID {id}."
         }), 404
-        
+
     prod_dict = product.to_dict()
     prod_dict['images'] = [img.to_dict() for img in product.images]
 
-    return jsonify({
-        "data": prod_dict
-    }), 200
+    return jsonify({"data": prod_dict}), 200
+
 
 @products_bp.route('/products', methods=['POST'])
 @roles_required('superadmin', 'admin')
@@ -147,10 +162,16 @@ def create_product(product_data):
     images_data = product_data.pop('images', [])
 
     if product_data.get('category_id'):
-        if not db.session.get(Category, product_data['category_id']):
+        category = db.session.get(Category, product_data['category_id'])
+        if not category:
             return jsonify({
                 "error_code": "CATEGORY_NOT_FOUND",
                 "message": "Category not found."
+            }), 404
+        if not category.is_active:
+            return jsonify({
+                "error_code": "CATEGORY_INACTIVE",
+                "message": "Cannot assign product to an inactive category."
             }), 400
 
     # Auto-generate unique SKU if not provided
@@ -160,7 +181,7 @@ def create_product(product_data):
     try:
         new_product = Product(**product_data)
         db.session.add(new_product)
-        db.session.flush()  # Dapatkan new_product.id sebelum commit
+        db.session.flush()  # get new_product.id before commit
 
         if images_data:
             if not any(img.get('is_primary') for img in images_data):
@@ -174,7 +195,7 @@ def create_product(product_data):
                 )
                 db.session.add(new_img)
 
-        db.session.commit()  # 1 commit atomik untuk product + images
+        db.session.commit()  # single atomic commit for product + images
 
     except SQLAlchemyError:
         db.session.rollback()
@@ -186,9 +207,8 @@ def create_product(product_data):
     prod_dict = new_product.to_dict()
     prod_dict['images'] = [img.to_dict() for img in new_product.images]
 
-    return jsonify({
-        "data": prod_dict
-    }), 201
+    return jsonify({"data": prod_dict}), 201
+
 
 @products_bp.route('/products/<int:id>', methods=['PUT'])
 @roles_required('superadmin', 'admin')
@@ -206,10 +226,16 @@ def update_product(product_data, id):
         }), 404
 
     if product_data.get('category_id'):
-        if not db.session.get(Category, product_data['category_id']):
+        category = db.session.get(Category, product_data['category_id'])
+        if not category:
             return jsonify({
                 "error_code": "CATEGORY_NOT_FOUND",
                 "message": "Category not found."
+            }), 404
+        if not category.is_active:
+            return jsonify({
+                "error_code": "CATEGORY_INACTIVE",
+                "message": "Cannot assign product to an inactive category."
             }), 400
 
     images_data = product_data.pop('images', None)
@@ -232,7 +258,7 @@ def update_product(product_data, id):
                     )
                     db.session.add(new_img)
 
-        db.session.commit()  # 1 commit atomik untuk product + images
+        db.session.commit()  # single atomic commit for product + images
 
     except SQLAlchemyError:
         db.session.rollback()
@@ -244,9 +270,8 @@ def update_product(product_data, id):
     prod_dict = product.to_dict()
     prod_dict['images'] = [img.to_dict() for img in product.images]
 
-    return jsonify({
-        "data": prod_dict
-    }), 200
+    return jsonify({"data": prod_dict}), 200
+
 
 @products_bp.route('/products/<int:id>', methods=['DELETE'])
 @roles_required('superadmin', 'admin')

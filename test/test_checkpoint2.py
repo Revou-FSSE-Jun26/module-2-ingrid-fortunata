@@ -42,12 +42,11 @@ class Checkpoint2TestCase(unittest.TestCase):
         self.assertEqual(data['error_code'], 'PRODUCT_NOT_FOUND')
 
     def test_04_post_user_register(self):
-        """POST /users creating a User with db.session.add and db.session.commit"""
+        """POST /users creating a User — uses 'password' field (schema hashes it internally)."""
         new_user_payload = {
             "username": "bob_builder",
             "email": "bob@example.com",
-            "password_hash": "hashed_secret_bob",
-            "role": "customer"
+            "password": "secret_bob_pw"
         }
         
         # Clean up if exists from previous runs
@@ -74,7 +73,7 @@ class Checkpoint2TestCase(unittest.TestCase):
         self.assertIsNotNone(user)
 
         # Login as bob_builder to get token
-        login_res = self.client.post('/auth/login', json={"username": "bob_builder", "password": "hashed_secret_bob"})
+        login_res = self.client.post('/auth/login', json={"username": "bob_builder", "password": "secret_bob_pw"})
         token = login_res.get_json()['data']['token']
         headers = {"Authorization": f"Bearer {token}"}
 
