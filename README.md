@@ -128,11 +128,34 @@ Open your browser to test endpoints interactively:
 
 ---
 
-#### Step 8: (Optional) Run Automated Test Suite
+#### Step 8: Run Automated Test Suite (Pytest)
+
+The project includes a comprehensive, modular `pytest` suite organized into models, schemas, routes, and testing feature demos.
 
 ```bash
-PYTHONPATH=. python3 -m pytest test/
+# Run all tests
+pytest tests/
+
+# Run with verbose output (shows individual test names and status)
+pytest tests/ -v
+
+# Run a specific test directory
+pytest tests/models/      # Unit tests for SQLAlchemy models
+pytest tests/schemas/     # Marshmallow schema & validator tests
+pytest tests/routes/      # Endpoint integration tests
+
+# Run a specific test file
+pytest tests/test_demo_summary.py -v
+
+# Run a specific test function by name/keyword
+pytest tests/schemas/test_validators.py -k "test_not_blank" -v
 ```
+
+##### 📊 Understanding Pytest Output & Test Summary
+* **`PASSED`** (Green): All assertions inside the test passed.
+* **`FAILED`** (Red): An assertion or error condition failed (shows readable visual diffs).
+* **`XFAIL`** (Yellow): Expected failure marked via `@pytest.mark.xfail` (does not break CI build).
+* **Summary Bar**: Displays the overall execution time and total counts (e.g., `46 passed, 1 xfailed in 1.03s`).
 
 ---
 
@@ -220,8 +243,12 @@ module-2-ingrid-fortunata/
 │   │   └── order.py          # Order & OrderItem schemas
 │   └── seed_data.py          # Database seeding script (categories, products, users, orders)
 ├── migrations/               # Alembic database migration history
-├── test/
-│   └── test_new_endpoints.py # Automated test suite (pytest)
+├── tests/                    # Modular Pytest Suite
+│   ├── conftest.py           # Shared fixtures (app, client, auth headers)
+│   ├── test_demo_summary.py  # Pytest demo (exceptions, match, xfail, summary)
+│   ├── models/               # Model unit tests (user, product, order)
+│   ├── schemas/              # Schema & validator tests (validation rules, errors)
+│   └── routes/               # Route integration tests (auth, users, products, orders)
 ├── img/                      # ERD Diagram & media assets
 ├── queries/                  # SQL scripts for verification
 ├── .env.example              # Template for local environment variables
