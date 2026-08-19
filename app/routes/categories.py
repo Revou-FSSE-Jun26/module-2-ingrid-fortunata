@@ -1,11 +1,11 @@
 from flask_smorest import Blueprint
-from flask import jsonify
+from flask import jsonify, request
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import selectinload
 from app.extensions import db
 from app.models.category import Category
 from app.models.product import Product
-from app.auth import roles_required
+from app.auth import roles_required, is_admin_user
 from app.schemas import (
     CategoryCreateInputSchema,
     CategoryUpdateInputSchema,
@@ -58,8 +58,23 @@ def create_category(category_data):
 @categories_bp.route('/categories', methods=['GET'])
 @categories_bp.response(200, CategoryListResponseSchema)
 def get_categories():
-    """List all categories."""
-    categories = Category.query.all()
+    """List categories.
+    Customers see only active categories. Admins can see all or filter by ?is_active=true|false.
+    """
+    is_admin = is_admin_user()
+    query = Category.query
+
+    if not is_admin:
+        query = query.filter_by(is_active=True)
+    else:
+        is_active_param = request.args.get('is_active')
+        if is_active_param is not None:
+            if is_active_param.lower() == 'true':
+                query = query.filter_by(is_active=True)
+            elif is_active_param.lower() == 'false':
+                query = query.filter_by(is_active=False)
+
+    categories = query.all()
     return jsonify({
         "data": [c.to_dict() for c in categories]
     }), 200
@@ -68,8 +83,17 @@ def get_categories():
 @categories_bp.route('/categories/<int:id>', methods=['GET'])
 @categories_bp.response(200, CategoryWithProductsResponseSchema)
 def get_category_by_id(id):
-    """Get a specific category along with its active products."""
-    category = Category.query.options(selectinload(Category.products)).filter_by(id=id).first()
+    """Get a specific category along with its products.
+    Customers can only access active categories and active products.
+    Admins can view any category along with all associated products.
+    """
+    is_admin = is_admin_user()
+    query = Category.query.options(selectinload(Category.products)).filter_by(id=id)
+
+    if not is_admin:
+        query = query.filter_by(is_active=True)
+
+    category = query.first()
     if not category:
         return jsonify({
             "error_code": "CATEGORY_NOT_FOUND",
@@ -77,7 +101,11 @@ def get_category_by_id(id):
         }), 404
 
     cat_dict = category.to_dict()
-    cat_dict['products'] = [p.to_dict() for p in category.products if p.is_active]
+    if not is_admin:
+        cat_dict['products'] = [p.to_dict() for p in category.products if p.is_active]
+    else:
+        cat_dict['products'] = [p.to_dict() for p in category.products]
+
     return jsonify({
         "data": cat_dict
     }), 200

@@ -561,8 +561,10 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 #### 2. Products Catalog
 
 ##### `GET /products`
-- **Auth**: None
-- **Description**: Retrieve active clothing products with pagination and fashion attribute filters.
+- **Auth**: Optional (JWT for admin features)
+- **Description**: Retrieve clothing products with pagination, sorting, and fashion attribute filters.
+  - **Customers**: Strictly see **only active products** (`is_active = true`) belonging to active (or uncategorized) categories.
+  - **Admins / Sellers**: View all products by default (including inactive/retired items) and can filter by `is_active`.
 - **Query Parameters**:
   | Parameter | Type | Options / Enums | Description |
   | :--- | :--- | :--- | :--- |
@@ -574,6 +576,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
   | `min_price` | Float | `>= 0` | Minimum unit price filter |
   | `max_price` | Float | `>= min_price` | Maximum unit price filter |
   | `sort_by` | String | `price_asc`, `price_desc`, `newest`, `name_asc` | Catalog sorting order (Default: `id` asc) |
+  | `is_active` | String | `true`, `false`, `all` | **(Admin only)** Filter active/inactive products |
   | `search` | String | Free-text string | Search across product `name` and `description` |
   | `page` | Integer | Min `1` | Page number for pagination |
   | `per_page` | Integer | Min `1`, Max `100` (Default: `10`) | Items per page |
@@ -609,8 +612,10 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 ---
 
 ##### `GET /products/<id>`
-- **Auth**: None
-- **Description**: Retrieve a single active product with its complete image gallery.
+- **Auth**: Optional (JWT for admin features)
+- **Description**: Retrieve a single product by ID along with its complete image gallery.
+  - **Customers**: Can only access active products (returns `404 PRODUCT_NOT_FOUND` if product is inactive).
+  - **Admins / Sellers**: Can view any product regardless of active status.
 - **Success Response (`200 OK`)**: Includes `images` array containing base64 images and `is_primary` flags.
 
 ---
@@ -654,12 +659,20 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 #### 3. Categories Management
 
 ##### `GET /categories`
-- **Auth**: None
-- **Description**: Retrieve all active categories.
+- **Auth**: Optional (JWT for admin features)
+- **Description**: Retrieve clothing categories.
+  - **Customers**: Strictly see **only active categories** (`is_active = true`).
+  - **Admins / Sellers**: View all categories by default and can filter with `?is_active=true|false`.
+- **Query Parameters**:
+  | Parameter | Type | Options / Enums | Description |
+  | :--- | :--- | :--- | :--- |
+  | `is_active` | String | `true`, `false` | **(Admin only)** Filter active/inactive categories |
 
 ##### `GET /categories/<id>`
-- **Auth**: None
-- **Description**: Retrieve a category by ID along with its associated active products.
+- **Auth**: Optional (JWT for admin features)
+- **Description**: Retrieve a category by ID along with its associated products.
+  - **Customers**: Can only access active categories, and associated `products` array only includes active items.
+  - **Admins / Sellers**: Can view any category regardless of active status, including all associated products.
 
 ##### `POST /categories`
 - **Auth**: JWT Required (`superadmin`, `admin`)
