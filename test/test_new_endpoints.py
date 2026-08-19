@@ -178,14 +178,22 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertIsNotNone(prod)
         initial_stock = prod.stock
 
-        # Place order
-        order_payload = {"items": [{"product_id": prod.id, "quantity": 2}]}
+        # Place order (now requires shipping details)
+        order_payload = {
+            "items": [{"product_id": prod.id, "quantity": 2}],
+            "shipping_address": "Jl. Sudirman No.1, Jakarta",
+            "recipient_name": "Alice Smith",
+            "recipient_phone": "08123456789"
+        }
         res = self.client.post('/orders', json=order_payload, headers=headers)
         self.assertEqual(res.status_code, 201)
         
         order_data = res.get_json()['data']
         order_id = order_data['id']
         self.assertEqual(order_data['items'][0]['quantity'], 2)
+        # Verify shipping fields are returned
+        self.assertEqual(order_data['shipping_address'], "Jl. Sudirman No.1, Jakarta")
+        self.assertEqual(order_data['recipient_name'], "Alice Smith")
 
         # Verify stock decrement
         db.session.refresh(prod)
@@ -201,9 +209,11 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(res.get_json()['data']['items']), 1)
 
-        # Delete order
+        # Soft-cancel order (DELETE now returns 200 and preserves history)
         res = self.client.delete(f'/orders/{order_id}', headers=headers)
-        self.assertEqual(res.status_code, 204)
+        self.assertEqual(res.status_code, 200)
+        cancelled = res.get_json()['data']
+        self.assertEqual(cancelled['status'], 'cancelled')
 
     def test_user_registration_password_hashing(self):
         # Register new user with raw password
@@ -260,8 +270,13 @@ class NewEndpointsTestCase(unittest.TestCase):
         # 2. Customer logs in
         customer_headers = self._get_customer_headers()
 
-        # 3. Customer places an order
-        order_payload = {"items": [{"product_id": 3, "quantity": 1}]}
+        # 3. Customer places an order (now requires shipping details)
+        order_payload = {
+            "items": [{"product_id": 3, "quantity": 1}],
+            "shipping_address": "Jl. Thamrin No.5, Jakarta",
+            "recipient_name": "Alice Smith",
+            "recipient_phone": "08111222333"
+        }
         res = self.client.post('/orders', json=order_payload, headers=customer_headers)
         self.assertEqual(res.status_code, 201)
         order_id = res.get_json()['data']['id']
@@ -287,13 +302,14 @@ class NewEndpointsTestCase(unittest.TestCase):
         res_forbidden_get = self.client.get(f'/orders/{order_id}', headers=other_headers)
         self.assertEqual(res_forbidden_get.status_code, 404)
 
-        # 7. Other customer tries to delete/reject it — should get 404
+        # 7. Other customer tries to cancel it — should get 404
         res_forbidden_del = self.client.delete(f'/orders/{order_id}', headers=other_headers)
         self.assertEqual(res_forbidden_del.status_code, 404)
 
-        # 8. Admin cancels/rejects the order — should succeed (returns 204)
+        # 8. Admin soft-cancels the order — should succeed (returns 200 with cancelled order)
         res_delete = self.client.delete(f'/orders/{order_id}', headers=admin_headers)
-        self.assertEqual(res_delete.status_code, 204)
+        self.assertEqual(res_delete.status_code, 200)
+        self.assertEqual(res_delete.get_json()['data']['status'], 'cancelled')
 
         # Cleanup other customer
         user_two = User.query.filter_by(username="customer_two").first()

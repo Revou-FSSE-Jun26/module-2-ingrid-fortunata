@@ -15,6 +15,9 @@ class OrderItemInputSchema(Schema):
 
 class OrderCreateInputSchema(Schema):
     items = fields.List(fields.Nested(OrderItemInputSchema), required=True)
+    shipping_address = fields.Str(required=True)
+    recipient_name = fields.Str(required=True)
+    recipient_phone = fields.Str(required=True)
 
     @validates("items")
     def validate_items(self, value, **kwargs):
@@ -26,6 +29,9 @@ class OrderResponseSchema(Schema):
     user_id = fields.Int(dump_only=True)
     total_amount = fields.Float(dump_only=True)
     status = fields.Str(dump_only=True)
+    shipping_address = fields.Str(dump_only=True, allow_none=True)
+    recipient_name = fields.Str(dump_only=True, allow_none=True)
+    recipient_phone = fields.Str(dump_only=True, allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 

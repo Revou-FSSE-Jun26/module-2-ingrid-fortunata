@@ -4,7 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.user import User
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app.schemas import UserRegisterInputSchema, UserRegisterResponseSchema, UserLoginInputSchema, UserGetResponseSchema, AuthLoginResponseSchema
 
 users_bp = Blueprint('users', __name__, description='Operations on users')
@@ -63,9 +63,28 @@ def register_user(user_data):
     }), 201
 
 @users_bp.route('/users/<int:id>', methods=['GET'])
+@jwt_required()
 @users_bp.response(200, UserGetResponseSchema)
 def get_user_by_id(id):
-    """Fetches and returns a user by ID, handling 404."""
+    """Fetches and returns a user by ID, handling 404.
+    Customers can only view their own profile.
+    Admins, sellers, and superadmins can view any user.
+    """
+    requester_id = int(get_jwt_identity())
+    requester = db.session.get(User, requester_id)
+    if not requester:
+        return jsonify({
+            'error_code': 'USER_NOT_FOUND',
+            'message': 'Authenticated user not found.'
+        }), 401
+
+    is_admin = requester.role in ['superadmin', 'admin', 'seller']
+    if not is_admin and requester_id != id:
+        return jsonify({
+            'error_code': 'USER_FORBIDDEN',
+            'message': 'You do not have permission to view this profile.'
+        }), 403
+
     user = db.session.get(User, id)
     if not user:
         return jsonify({

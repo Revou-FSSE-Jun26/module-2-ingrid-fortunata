@@ -69,11 +69,16 @@ class Checkpoint2TestCase(unittest.TestCase):
         self.assertIn('role', data['data'])
 
     def test_05_get_user_by_id_success(self):
-        """GET /users/<id> retrieving user from DB"""
+        """GET /users/<id> retrieving user from DB (requires JWT auth)"""
         user = User.query.filter_by(username="bob_builder").first()
         self.assertIsNotNone(user)
 
-        response = self.client.get(f'/users/{user.id}')
+        # Login as bob_builder to get token
+        login_res = self.client.post('/auth/login', json={"username": "bob_builder", "password": "hashed_secret_bob"})
+        token = login_res.get_json()['data']['token']
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = self.client.get(f'/users/{user.id}', headers=headers)
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         print(f"\n--- GET /users/{user.id} (Retrieve) Output ---")
@@ -81,13 +86,11 @@ class Checkpoint2TestCase(unittest.TestCase):
         self.assertEqual(data['data']['username'], "bob_builder")
 
     def test_06_get_user_by_id_not_found(self):
-        """GET /users/9999 returning 404 Not Found"""
+        """GET /users/9999 without token now returns 401 (auth required)"""
         response = self.client.get('/users/9999')
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        print("\n--- GET /users/9999 (Not Found) Output ---")
-        print(json.dumps(data, indent=2))
-        self.assertEqual(data['error_code'], 'USER_NOT_FOUND')
+        self.assertEqual(response.status_code, 401)
+        print("\n--- GET /users/9999 (No Token) Output ---")
+        print(json.dumps(response.get_json(), indent=2))
 
 if __name__ == '__main__':
     unittest.main()
