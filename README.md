@@ -6,7 +6,7 @@
 
 **RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, and **PostgreSQL**. 
 
-It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC).
+It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC) with simplified roles (`superadmin`, `admin`, `customer`).
 
 This document serves as a complete technical guide for **Backend Developers** (understanding architecture, DB design rationale, ORM models, migrations, and local setup) and **Frontend Developers** (implementing UI workflows, request payloads, response formats, headers, and enum options).
 
@@ -87,6 +87,7 @@ flask db upgrade
 > **Migration History**:
 > - Initial migration creates base tables: `users`, `categories`, `products`, `product_images`, `orders`, `order_items`.
 > - Revision `aa0fd34ebf0e` applies the `role` column to `users`.
+> - Revision `b102e24f5184` simplifies user roles, sets size default to 'Free Size', color to NOT NULL, gender default to 'Unisex', sku to NOT NULL with auto-generation, shipping fields to NOT NULL, and order items size/color to NOT NULL.
 
 ---
 
@@ -103,8 +104,7 @@ PYTHONPATH=. python3 app/seed_data.py
 | Username | Email | Password | Role | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `superadmin_user` | `superadmin@revofashion.com` | `superadmin_password` | `superadmin` | Full system access |
-| `admin_user` | `admin@revofashion.com` | `admin_password` | `admin` | Catalog & order admin |
-| `seller_user` | `seller@revofashion.com` | `seller_password` | `seller` | Merchant partner |
+| `admin_user` | `admin@revofashion.com` | `admin_password` | `admin` | Catalog & order admin / staff |
 | `alice_smith` | `alice@example.com` | `alice_password` | `customer` | Test customer |
 
 ---
@@ -169,7 +169,7 @@ JOIN products p ON oi.product_id = p.id;
 - ✅ **Flexible Catalog Filtering & Search**: Filter `GET /products` by `gender`, `size`, `color`, `material`, free-text `search` (name & description), and pagination (`page`, `per_page`).
 - ✅ **Historical Variant & Price Snapshotting**: `order_items` junction table snapshotting item price, size, and color at the exact moment of purchase so historical orders are immune to future catalog price changes or product updates.
 - ✅ **Stateless JWT Authentication**: Secure authentication via `Flask-JWT-Extended` with 24-hour token expiration.
-- ✅ **Role-Based Access Control (RBAC)**: Custom `@roles_required` decorator enforcing permission levels across 4 user roles (`superadmin`, `admin`, `seller`, `customer`).
+- ✅ **Role-Based Access Control (RBAC)**: Custom `@roles_required` decorator enforcing permission levels across 3 user roles (`superadmin`, `admin`, `customer`).
 - ✅ **Order Lifecycle & State Machine**: Status transitions (`pending` → `paid` → `processing` → `shipped` → `delivered` or `cancelled`) with role enforcement.
 - ✅ **Automated Stock Control**: Stock is decremented on order placement and restored upon order cancellation.
 - ✅ **Soft-Cancel Order Deletion**: `DELETE /orders/<id>` performs a soft cancel (restores stock, sets status to `cancelled`, preserves audit row).
@@ -252,7 +252,7 @@ Stores registered user accounts, login credentials, and permission roles.
 | `username` | `VARCHAR(50)` | `UNIQUE`, `NOT NULL` | Unique account username |
 | `email` | `VARCHAR(120)` | `UNIQUE`, `NOT NULL` | Unique email address |
 | `password_hash` | `VARCHAR(255)` | `NOT NULL` | PBKDF2/scrypt hashed password |
-| `role` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'customer'` | User role enum (`superadmin`, `admin`, `seller`, `customer`) |
+| `role` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'customer'` | User role enum (`superadmin`, `admin`, `customer`) |
 | `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Account status toggle |
 | `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Account creation timestamp |
 
@@ -294,11 +294,11 @@ Stores clothing items with fashion-specific attributes and stock balances.
 | `description` | `TEXT` | `NULLABLE` | Detailed description |
 | `price` | `NUMERIC(10, 2)` | `NOT NULL` | Unit price |
 | `stock` | `INTEGER` | `NOT NULL`, `DEFAULT 0` | Available stock count |
-| `size` | `VARCHAR(20)` | `NULLABLE` | Fashion size (`XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE`) |
-| `color` | `VARCHAR(50)` | `NULLABLE` | Color variation |
+| `size` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'Free Size'` | Fashion size (`XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE`, `Free Size`) |
+| `color` | `VARCHAR(50)` | `NOT NULL` | Color variation |
 | `material` | `VARCHAR(150)` | `NULLABLE` | Fabric composition |
-| `gender` | `VARCHAR(20)` | `NULLABLE` | Target demographic (`Men`, `Women`, `Unisex`, `Kids`) |
-| `sku` | `VARCHAR(50)` | `UNIQUE`, `NULLABLE` | Stock Keeping Unit code |
+| `gender` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'Unisex'` | Target demographic (`Men`, `Women`, `Unisex`, `Kids`) |
+| `sku` | `VARCHAR(50)` | `UNIQUE`, `NOT NULL` | Stock Keeping Unit code (auto-generated if omitted) |
 | `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Soft delete flag |
 | `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Modification timestamp |
@@ -340,9 +340,9 @@ Stores overall order metadata, buyer reference, status state, and delivery detai
 | `user_id` | `INTEGER` | `FK → users.id (RESTRICT)`, `NOT NULL` | Customer who placed order |
 | `total_amount` | `NUMERIC(10, 2)` | `NOT NULL`, `DEFAULT 0.00` | Order total monetary value |
 | `status` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'pending'` | Lifecycle status (`pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`) |
-| `shipping_address` | `TEXT` | `NULLABLE` | Delivery address snapshot |
-| `recipient_name` | `VARCHAR(150)` | `NULLABLE` | Recipient full name snapshot |
-| `recipient_phone` | `VARCHAR(30)` | `NULLABLE` | Contact phone number snapshot |
+| `shipping_address` | `TEXT` | `NOT NULL` | Delivery address snapshot |
+| `recipient_name` | `VARCHAR(150)` | `NOT NULL` | Recipient full name snapshot |
+| `recipient_phone` | `VARCHAR(30)` | `NOT NULL` | Contact phone number snapshot |
 | `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Order timestamp |
 | `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Last status update timestamp |
 
@@ -363,8 +363,8 @@ Associates `orders` and `products` while capturing transaction snapshots.
 | `product_id` | `INTEGER` | `PK`, `FK → products.id (RESTRICT)` | Linked product |
 | `quantity` | `INTEGER` | `NOT NULL`, `DEFAULT 1` | Purchased quantity |
 | `price_at_purchase` | `NUMERIC(10, 2)` | `NOT NULL` | Snapshot unit price at purchase time |
-| `size` | `VARCHAR(20)` | `NULLABLE` | Purchased size variant |
-| `color` | `VARCHAR(50)` | `NULLABLE` | Purchased color variant |
+| `size` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'Free Size'` | Purchased size variant |
+| `color` | `VARCHAR(50)` | `NOT NULL` | Purchased color variant |
 
 - **Design Rationale (Why - CRITICAL)**:
   - **Price & Variant Snapshotting**: Stores `price_at_purchase`, `size`, and `color` directly in the junction table. **Why?** Product prices or available attributes in the catalog change over time. Snapshotting ensures past financial totals and customer order history remain 100% accurate and immutable regardless of catalog updates.
@@ -381,9 +381,8 @@ User authorization is enforced via JWT claims and the custom `@roles_required` d
 | Role | Access Scope & Description | Default? |
 | :--- | :--- | :--- |
 | `customer` | Standard retail customer. Can register, log in, place orders, view active products/categories, and view **only their own** profile and orders. | **Yes** (Default on `POST /users`) |
-| `seller` | Merchant partner. Can create, update, and soft-delete products/categories. Can view all orders in system and manage order fulfillment statuses. | No |
-| `admin` | System administrator. Full operational access over catalog, categories, user profiles, and order lifecycles. | No |
-| `superadmin` | System owner. Unrestricted permissions across all system resources and endpoints. | No |
+| `admin` | System administrator / Store staff. Full operational access over catalog, categories, user profiles, and order lifecycles/statuses. | No |
+| `superadmin` | System owner. Unrestricted permissions across all system resources, users, configurations, and endpoints. | No |
 
 ---
 
@@ -397,7 +396,7 @@ The `status` column on the `orders` table tracks the lifecycle of an order.
 | :--- | :--- |
 | `pending` | Order placed, stock reserved, awaiting payment (Default on order creation) |
 | `paid` | Customer completed payment |
-| `processing` | Seller/admin is preparing items for dispatch |
+| `processing` | Admin/staff is preparing items for dispatch |
 | `shipped` | Order handed to logistics carrier |
 | `delivered` | Order successfully delivered to recipient |
 | `cancelled` | Order cancelled; stock automatically restored to inventory |
@@ -415,9 +414,9 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 | From Status \ To Status | `paid` | `processing` | `shipped` | `delivered` | `cancelled` |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **`pending`** | ✅ *(Customer/Admin)* | ❌ | ❌ | ❌ | ✅ *(Customer/Admin)* |
-| **`paid`** | ❌ | ✅ *(Seller/Admin)* | ❌ | ❌ | ✅ *(Customer/Admin)* |
-| **`processing`** | ❌ | ❌ | ✅ *(Seller/Admin)* | ❌ | ❌ |
-| **`shipped`** | ❌ | ❌ | ❌ | ✅ *(Seller/Admin)* | ❌ |
+| **`paid`** | ❌ | ✅ *(Admin)* | ❌ | ❌ | ✅ *(Customer/Admin)* |
+| **`processing`** | ❌ | ❌ | ✅ *(Admin)* | ❌ | ❌ |
+| **`shipped`** | ❌ | ❌ | ❌ | ✅ *(Admin)* | ❌ |
 | **`delivered`** | — | — | — | — | — *(Terminal state)* |
 | **`cancelled`** | — | — | — | — | — *(Terminal state)* |
 
@@ -532,14 +531,14 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
   | `username` | String | **Required** | Unique username |
   | `email` | String | **Required** | Unique email address |
   | `password` | String | **Required** | Account password |
-  | `role` | String | Optional | Options: `superadmin`, `admin`, `seller`, `customer` (Default: `customer`) |
+  | `role` | String | Optional | Options: `superadmin`, `admin`, `customer` (Default: `customer`) |
 - **Success Response (`201 Created`)**: Returns created user profile.
 
 ---
 
 ##### `GET /users/<id>`
 - **Auth**: JWT Required (`Authorization: Bearer <token>`)
-- **Permissions**: Customers can access **only their own** profile (`user_id == id`). Admins, sellers, and superadmins can view any profile.
+- **Permissions**: Customers can access **only their own** profile (`user_id == id`). Admins and superadmins can view any profile.
 - **Success Response (`200 OK`)**: Returns user profile details.
 
 ---
@@ -598,7 +597,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 ---
 
 ##### `POST /products`
-- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Create a new clothing product.
 - **Request Body Payload**:
   | Field | Type | Required | Options / Enums / Validation |
@@ -606,24 +605,24 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
   | `name` | String | **Required** | Product title |
   | `price` | Float | **Required** | Must be `> 0` |
   | `stock` | Integer | **Required** | Must be `>= 0` |
+  | `color` | String | **Required** | Color name |
   | `category_id` | Integer | Optional | Valid category ID |
-  | `size` | String | Optional | Options: `XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE` |
-  | `color` | String | Optional | Color name |
+  | `size` | String | Optional | Options: `XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE`, `Free Size` (Default: `Free Size`) |
   | `material` | String | Optional | Fabric composition |
-  | `gender` | String | Optional | Options: `Men`, `Women`, `Unisex`, `Kids` |
-  | `sku` | String | Optional | Unique SKU code |
+  | `gender` | String | Optional | Options: `Men`, `Women`, `Unisex`, `Kids` (Default: `Unisex`) |
+  | `sku` | String | Optional | Unique SKU code (auto-generated if omitted) |
   | `images` | Array | Optional | Max 3 images. Object fields: `image_base64` (Max 1MB), `is_primary` (Boolean, max 1 primary) |
 
 ---
 
 ##### `PUT /products/<id>`
-- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Full replacement update of a product entity and its image gallery.
 
 ---
 
 ##### `DELETE /products/<id>`
-- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Delete a product. Blocked with `400 Bad Request` if product is referenced in historical orders.
 
 ---
@@ -639,14 +638,14 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 - **Description**: Retrieve a category by ID along with its associated active products.
 
 ##### `POST /categories`
-- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Auth**: JWT Required (`superadmin`, `admin`)
 - **Request Payload**: `{"name": "Outerwear", "description": "Jackets & Coats", "is_active": true}`
 
 ##### `PUT /categories/<id>`
-- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Auth**: JWT Required (`superadmin`, `admin`)
 
 ##### `DELETE /categories/<id>`
-- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Auth**: JWT Required (`superadmin`, `admin`)
 
 ---
 
@@ -654,7 +653,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 
 ##### `GET /orders`
 - **Auth**: JWT Required
-- **Permissions**: Customers receive **only their own** orders. Admins/sellers/superadmins view all system orders.
+- **Permissions**: Customers receive **only their own** orders. Admins/superadmins view all system orders.
 
 ---
 
@@ -666,7 +665,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 
 ##### `POST /orders`
 - **Auth**: JWT Required (All authenticated users)
-- **Description**: Place a new order. Validates stock, decrements inventory, and records size/color variants and price snapshot.
+- **Description**: Place a new order. Validates stock, decrements inventory, and records size/color variants (synced from product if not specified) and price snapshot. Shipping details are strictly required.
 - **Request Body Payload**:
   ```json
   {
@@ -677,8 +676,8 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
       {
         "product_id": 1,
         "quantity": 2,
-        "size": "M",
-        "color": "White"
+        "size": "M",  // Optional (defaults to product size if omitted)
+        "color": "White"  // Optional (defaults to product color if omitted)
       }
     ]
   }
@@ -720,7 +719,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
    ```
 
 ### 2. Rendering UI Select Controls (Enums)
-- **Clothing Sizes**: Populate dropdowns with `["XS", "S", "M", "L", "XL", "XXL", "FREE"]`.
+- **Clothing Sizes**: Populate dropdowns with `["XS", "S", "M", "L", "XL", "XXL", "FREE", "Free Size"]`.
 - **Gender Filter**: Populate tab filters with `["Men", "Women", "Unisex", "Kids"]`.
 - **Order Status Badges**: Map status strings to UI badge colors:
   - `pending` ➔ Yellow / Orange
