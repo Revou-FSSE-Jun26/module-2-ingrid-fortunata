@@ -248,6 +248,9 @@ module-2-ingrid-fortunata/
 │   │   ├── category_validators.py # Category uniqueness & safe deletion checks
 │   │   ├── product_validators.py  # Category active verification & order history checks
 │   │   └── order_validators.py    # Stock locking (with_for_update), transition & cancel rules
+│   ├── utils/                # General Helpers & Utilities
+│   │   ├── __init__.py       # Utility exports
+│   │   └── pagination.py     # Centralized query pagination parameter parsing
 │   └── seed_data.py          # Database seeding script (categories, products, users, orders)
 ├── migrations/               # Alembic database migration history
 ├── tests/                    # Modular Pytest Suite (84 tests)
