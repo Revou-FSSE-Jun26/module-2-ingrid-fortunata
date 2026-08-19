@@ -566,10 +566,14 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 - **Query Parameters**:
   | Parameter | Type | Options / Enums | Description |
   | :--- | :--- | :--- | :--- |
+  | `category_id` | Integer | Valid category ID | Filter products by category |
   | `gender` | String | `Men`, `Women`, `Unisex`, `Kids` | Filter by target demographic |
   | `size` | String | `XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE` | Filter by clothing size |
   | `color` | String | Case-insensitive substring | Filter by color (e.g., `Navy`, `White`) |
   | `material` | String | Case-insensitive substring | Filter by fabric (e.g., `Cotton`) |
+  | `min_price` | Float | `>= 0` | Minimum unit price filter |
+  | `max_price` | Float | `>= min_price` | Maximum unit price filter |
+  | `sort_by` | String | `price_asc`, `price_desc`, `newest`, `name_asc` | Catalog sorting order (Default: `id` asc) |
   | `search` | String | Free-text string | Search across product `name` and `description` |
   | `page` | Integer | Min `1` | Page number for pagination |
   | `per_page` | Integer | Min `1`, Max `100` (Default: `10`) | Items per page |
@@ -677,6 +681,12 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 ##### `GET /orders`
 - **Auth**: JWT Required
 - **Permissions**: Customers receive **only their own** orders. Admins/superadmins view all system orders.
+- **Query Parameters**:
+  | Parameter | Type | Options / Enums | Description |
+  | :--- | :--- | :--- | :--- |
+  | `status` | String | `pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled` | Filter orders by lifecycle status |
+  | `page` | Integer | Min `1` | Page number for pagination |
+  | `per_page` | Integer | Min `1`, Max `100` (Default: `10`) | Orders per page |
 
 ---
 

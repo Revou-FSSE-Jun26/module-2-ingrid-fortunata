@@ -88,6 +88,20 @@ def get_all_products():
     if material:
         products_query = products_query.filter(Product.material.ilike(f'%{material}%'))
 
+    # Category filter
+    category_id = request.args.get('category_id', None, type=int)
+    if category_id is not None:
+        products_query = products_query.filter(Product.category_id == category_id)
+
+    # Price range filters
+    min_price = request.args.get('min_price', None, type=float)
+    if min_price is not None:
+        products_query = products_query.filter(Product.price >= max(0.0, min_price))
+
+    max_price = request.args.get('max_price', None, type=float)
+    if max_price is not None:
+        products_query = products_query.filter(Product.price <= max_price)
+
     # Free-text search across name and description
     search = request.args.get('search')
     if search:
@@ -98,6 +112,19 @@ def get_all_products():
                 Product.description.ilike(search_term)
             )
         )
+
+    # Sorting
+    sort_by = request.args.get('sort_by')
+    if sort_by == 'price_asc':
+        products_query = products_query.order_by(Product.price.asc(), Product.id.asc())
+    elif sort_by == 'price_desc':
+        products_query = products_query.order_by(Product.price.desc(), Product.id.asc())
+    elif sort_by == 'newest':
+        products_query = products_query.order_by(Product.created_at.desc(), Product.id.asc())
+    elif sort_by == 'name_asc':
+        products_query = products_query.order_by(Product.name.asc(), Product.id.asc())
+    else:
+        products_query = products_query.order_by(Product.id.asc())
 
     # Pagination (clamped)
     page, per_page = _safe_page_params()

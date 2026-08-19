@@ -497,9 +497,56 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertEqual(del_hard_res.status_code, 204)
         self.assertIsNone(db.session.get(Product, test_prod_id2))
 
+    def test_product_category_price_and_sort_filters(self):
+        """Test GET /products filtering by category_id, min_price, max_price, and sorting."""
+        # 1. Category ID filter
+        res_cat = self.client.get('/products?category_id=1')
+        self.assertEqual(res_cat.status_code, 200)
+        data_cat = res_cat.get_json()['data']
+        for p in data_cat:
+            self.assertEqual(p['category_id'], 1)
+
+        # 2. Price range filter
+        res_price = self.client.get('/products?min_price=10.00&max_price=20.00')
+        self.assertEqual(res_price.status_code, 200)
+        data_price = res_price.get_json()['data']
+        for p in data_price:
+            self.assertTrue(10.00 <= p['price'] <= 20.00)
+
+        # 3. Sort by price ascending
+        res_sort_asc = self.client.get('/products?sort_by=price_asc')
+        self.assertEqual(res_sort_asc.status_code, 200)
+        data_sort_asc = res_sort_asc.get_json()['data']
+        prices_asc = [p['price'] for p in data_sort_asc]
+        self.assertEqual(prices_asc, sorted(prices_asc))
+
+        # 4. Sort by price descending
+        res_sort_desc = self.client.get('/products?sort_by=price_desc')
+        self.assertEqual(res_sort_desc.status_code, 200)
+        data_sort_desc = res_sort_desc.get_json()['data']
+        prices_desc = [p['price'] for p in data_sort_desc]
+        self.assertEqual(prices_desc, sorted(prices_desc, reverse=True))
+
+    def test_orders_status_filter(self):
+        """Test GET /orders filtering by status."""
+        customer_headers = self._get_customer_headers()
+
+        # 1. Get orders filtered by status 'pending'
+        res_pending = self.client.get('/orders?status=pending', headers=customer_headers)
+        self.assertEqual(res_pending.status_code, 200)
+        for order in res_pending.get_json()['data']:
+            self.assertEqual(order['status'], 'pending')
+
+        # 2. Get orders filtered by status 'delivered'
+        res_delivered = self.client.get('/orders?status=delivered', headers=customer_headers)
+        self.assertEqual(res_delivered.status_code, 200)
+        for order in res_delivered.get_json()['data']:
+            self.assertEqual(order['status'], 'delivered')
+
 
 if __name__ == '__main__':
     unittest.main()
+
 
 
 

@@ -18,6 +18,15 @@ class Config:
     SQLALCHEMY_DATABASE_URI = DATABASE_URL or 'postgresql://postgres:postgres@localhost:5432/revoshop_db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Database connection pooling settings
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,          # Persistent connections maintained in pool
+        'max_overflow': 20,       # Extra burst connections under spike load
+        'pool_timeout': 30,       # Max seconds to wait for a connection
+        'pool_recycle': 1800,     # Recycle connections every 30 mins to prevent stale drops
+        'pool_pre_ping': True     # Liveness health check before using pooled connection
+    }
+
     # OpenAPI/Swagger UI configuration
     API_TITLE = "RevoFashion API"
     API_VERSION = "v1"
