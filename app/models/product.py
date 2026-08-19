@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from app.extensions import db
 
@@ -20,6 +21,20 @@ class Product(db.Model):
     is_active = db.Column(db.Boolean, default=True, server_default='true', nullable=False)
 
     images = db.relationship('ProductImage', backref='product', cascade='all, delete-orphan', lazy=True)
+
+    @staticmethod
+    def generate_unique_sku() -> str:
+        """Generates a random unique SKU code with prefix UQ-."""
+        while True:
+            sku_candidate = f"UQ-{secrets.token_hex(4).upper()}"
+            if not Product.query.filter_by(sku=sku_candidate).first():
+                return sku_candidate
+
+    def to_detail_dict(self) -> dict:
+        """Returns product representation including all associated image payloads."""
+        d = self.to_dict()
+        d['images'] = [img.to_dict() for img in self.images]
+        return d
 
     def to_dict(self):
         return {

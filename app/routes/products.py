@@ -1,13 +1,11 @@
-import secrets
 from flask_smorest import Blueprint
 from flask import jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.product import Product, ProductImage
 from app.models.category import Category
-from app.models.order import Order, order_items
 from app.auth import roles_required, is_admin_user
-from app.errors import error_response, not_found_response, conflict_response
+from app.errors import error_response, not_found_response
 from app.validators import validate_product_category, validate_product_deletion
 from app.utils.pagination import get_page_params
 from app.schemas import (
@@ -18,14 +16,6 @@ from app.schemas import (
 )
 
 products_bp = Blueprint('products', __name__, description='Operations on products')
-
-
-def generate_unique_sku():
-    """Generates a random unique SKU code with prefix UQ-."""
-    while True:
-        sku_candidate = f"UQ-{secrets.token_hex(4).upper()}"
-        if not Product.query.filter_by(sku=sku_candidate).first():
-            return sku_candidate
 
 
 def save_product_images(product_id: int, images_data: list, replace: bool = False):
@@ -48,25 +38,16 @@ def save_product_images(product_id: int, images_data: list, replace: bool = Fals
         db.session.add(new_img)
 
 
-@products_bp.route('/products', methods=['GET'])
-@products_bp.response(200, ProductListResponseSchema)
-def get_all_products():
-    """Returns a paginated list of active products whose category is also active (or uncategorized).
-    Supports optional filters: ?gender=Women&size=M&color=Black
-    Pagination: ?page=1&per_page=10 (max per_page=100)
-    """
-    # Subquery to select the base64 content of primary image
+def build_filtered_products_query(args: dict, is_admin: bool):
+    """Builds the base query and applies role visibility, search, fashion filters, and sorting."""
     primary_image_subquery = db.session.query(
         ProductImage.product_id,
         ProductImage.image_base64
     ).filter(
-        ProductImage.is_primary == True
+        ProductImage.is_primary.is_(True)
     ).subquery()
 
-    is_admin = is_admin_user()
-
-    # Build base query
-    products_query = db.session.query(
+    query = db.session.query(
         Product,
         primary_image_subquery.c.image_base64.label('primary_image')
     ).join(
@@ -77,77 +58,76 @@ def get_all_products():
 
     if not is_admin:
         # Public / customer view: strictly active products in active (or uncategorized) categories
-        products_query = products_query.filter(
-            Product.is_active == True,
-            (Category.id == None) | (Category.is_active == True)
+        query = query.filter(
+            Product.is_active.is_(True),
+            (Category.id.is_(None)) | (Category.is_active.is_(True))
         )
     else:
         # Admin / seller view: shows all by default, or filters by is_active query param
-        is_active_param = request.args.get('is_active')
+        is_active_param = args.get('is_active')
         if is_active_param is not None:
             if is_active_param.lower() == 'true':
-                products_query = products_query.filter(Product.is_active == True)
+                query = query.filter(Product.is_active.is_(True))
             elif is_active_param.lower() == 'false':
-                products_query = products_query.filter(Product.is_active == False)
+                query = query.filter(Product.is_active.is_(False))
 
     # Fashion-specific filters
-    gender = request.args.get('gender')
-    if gender:
-        products_query = products_query.filter(Product.gender == gender)
+    if args.get('gender'):
+        query = query.filter(Product.gender == args['gender'])
 
-    size = request.args.get('size')
-    if size:
-        products_query = products_query.filter(Product.size == size)
+    if args.get('size'):
+        query = query.filter(Product.size == args['size'])
 
-    color = request.args.get('color')
-    if color:
-        products_query = products_query.filter(Product.color.ilike(f'%{color}%'))
+    if args.get('color'):
+        query = query.filter(Product.color.ilike(f"%{args['color']}%"))
 
-    material = request.args.get('material')
-    if material:
-        products_query = products_query.filter(Product.material.ilike(f'%{material}%'))
+    if args.get('material'):
+        query = query.filter(Product.material.ilike(f"%{args['material']}%"))
 
-    # Category filter
-    category_id = request.args.get('category_id', None, type=int)
-    if category_id is not None:
-        products_query = products_query.filter(Product.category_id == category_id)
+    if args.get('category_id') is not None:
+        query = query.filter(Product.category_id == args.get('category_id', type=int))
 
     # Price range filters
-    min_price = request.args.get('min_price', None, type=float)
+    min_price = args.get('min_price', None, type=float)
     if min_price is not None:
-        products_query = products_query.filter(Product.price >= max(0.0, min_price))
+        query = query.filter(Product.price >= max(0.0, min_price))
 
-    max_price = request.args.get('max_price', None, type=float)
+    max_price = args.get('max_price', None, type=float)
     if max_price is not None:
-        products_query = products_query.filter(Product.price <= max_price)
+        query = query.filter(Product.price <= max_price)
 
     # Free-text search across name and description
-    search = request.args.get('search')
+    search = args.get('search')
     if search:
         search_term = f'%{search}%'
-        products_query = products_query.filter(
+        query = query.filter(
             db.or_(
                 Product.name.ilike(search_term),
                 Product.description.ilike(search_term)
             )
         )
 
-    # Sorting: Default is newest/recently updated first (updated_at desc, id desc)
-    sort_by = request.args.get('sort_by')
-    if sort_by == 'oldest':
-        products_query = products_query.order_by(Product.updated_at.asc(), Product.id.asc())
-    elif sort_by == 'price_asc':
-        products_query = products_query.order_by(Product.price.asc(), Product.id.asc())
-    elif sort_by == 'price_desc':
-        products_query = products_query.order_by(Product.price.desc(), Product.id.asc())
-    elif sort_by == 'name_asc':
-        products_query = products_query.order_by(Product.name.asc(), Product.id.asc())
-    elif sort_by == 'name_desc':
-        products_query = products_query.order_by(Product.name.desc(), Product.id.asc())
-    else:  # default or 'newest'
-        products_query = products_query.order_by(Product.updated_at.desc(), Product.id.desc())
+    # Sorting
+    sort_by = args.get('sort_by')
+    sort_map = {
+        'oldest': (Product.updated_at.asc(), Product.id.asc()),
+        'price_asc': (Product.price.asc(), Product.id.asc()),
+        'price_desc': (Product.price.desc(), Product.id.asc()),
+        'name_asc': (Product.name.asc(), Product.id.asc()),
+        'name_desc': (Product.name.desc(), Product.id.asc()),
+    }
+    order_clause = sort_map.get(sort_by, (Product.updated_at.desc(), Product.id.desc()))
+    return query.order_by(*order_clause)
 
-    # Pagination (clamped)
+
+@products_bp.route('/products', methods=['GET'])
+@products_bp.response(200, ProductListResponseSchema)
+def get_all_products():
+    """Returns a paginated list of active products whose category is also active (or uncategorized).
+    Supports optional filters: ?gender=Women&size=M&color=Black
+    Pagination: ?page=1&per_page=10 (max per_page=100)
+    """
+    products_query = build_filtered_products_query(request.args, is_admin=is_admin_user())
     page, per_page = get_page_params()
 
     if page is not None:
@@ -166,7 +146,6 @@ def get_all_products():
             "pages": pagination.pages
         }), 200
 
-    # Default: return all matching products (no pagination)
     results = products_query.all()
     data = []
     for prod, primary_image in results:
@@ -190,19 +169,15 @@ def get_product_by_id(id):
 
     if not is_admin:
         query = query.filter(
-            Product.is_active == True,
-            (Category.id == None) | (Category.is_active == True)
+            Product.is_active.is_(True),
+            (Category.id.is_(None)) | (Category.is_active.is_(True))
         )
 
     product = query.first()
-
     if not product:
         return not_found_response("Product", id)
 
-    prod_dict = product.to_dict()
-    prod_dict['images'] = [img.to_dict() for img in product.images]
-
-    return jsonify({"data": prod_dict}), 200
+    return jsonify({"data": product.to_detail_dict()}), 200
 
 
 @products_bp.route('/products', methods=['POST'])
@@ -213,32 +188,26 @@ def create_product(product_data):
     """Create a new product with up to 3 images."""
     images_data = product_data.pop('images', [])
 
-    # Validate category if provided
     category, err = validate_product_category(product_data.get('category_id'))
     if err:
         return err
 
-    # Auto-generate unique SKU if not provided
     if not product_data.get('sku'):
-        product_data['sku'] = generate_unique_sku()
+        product_data['sku'] = Product.generate_unique_sku()
 
     try:
         new_product = Product(**product_data)
         db.session.add(new_product)
-        db.session.flush()  # get new_product.id before commit
+        db.session.flush()
 
         save_product_images(new_product.id, images_data, replace=False)
-
-        db.session.commit()  # single atomic commit for product + images
+        db.session.commit()
 
     except SQLAlchemyError:
         db.session.rollback()
         return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while creating the product.", 500)
 
-    prod_dict = new_product.to_dict()
-    prod_dict['images'] = [img.to_dict() for img in new_product.images]
-
-    return jsonify({"data": prod_dict}), 201
+    return jsonify({"data": new_product.to_detail_dict()}), 201
 
 
 @products_bp.route('/products/<int:id>', methods=['PUT'])
@@ -253,7 +222,6 @@ def update_product(product_data, id):
     if not product:
         return not_found_response("Product", id)
 
-    # Validate category if provided
     category, err = validate_product_category(product_data.get('category_id'))
     if err:
         return err
@@ -267,16 +235,13 @@ def update_product(product_data, id):
         if images_data is not None:
             save_product_images(id, images_data, replace=True)
 
-        db.session.commit()  # single atomic commit for product + images
+        db.session.commit()
 
     except SQLAlchemyError:
         db.session.rollback()
         return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while updating the product.", 500)
 
-    prod_dict = product.to_dict()
-    prod_dict['images'] = [img.to_dict() for img in product.images]
-
-    return jsonify({"data": prod_dict}), 200
+    return jsonify({"data": product.to_detail_dict()}), 200
 
 
 @products_bp.route('/products/<int:id>', methods=['DELETE'])
@@ -291,18 +256,15 @@ def delete_product(id):
     if not product:
         return not_found_response("Product", id)
 
-    # Check for order history constraints via validator
     has_any_orders, err = validate_product_deletion(id)
     if err:
         return err
 
     try:
         if has_any_orders:
-            # Soft-delete: deactivate from catalog so historical order items and DB foreign keys remain intact
             product.is_active = False
             db.session.commit()
         else:
-            # Hard-delete: safe to remove completely
             db.session.delete(product)
             db.session.commit()
     except SQLAlchemyError:
