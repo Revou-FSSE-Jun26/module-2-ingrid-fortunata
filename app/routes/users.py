@@ -1,5 +1,6 @@
 from flask_smorest import Blueprint
 from flask import jsonify
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.extensions import db
 from app.models.user import User
@@ -26,13 +27,13 @@ def register_user(user_data):
     raw_password = user_data.get('password')
 
     # Duplicate checks — 409 Conflict (not 400) for existing resources
-    if User.query.filter_by(username=username).first():
+    if User.query.filter(func.lower(User.username) == username.lower()).first():
         return jsonify({
             'error_code': 'USER_NAME_CONFLICT',
             'message': 'Username already exists.'
         }), 409
 
-    if User.query.filter_by(email=email).first():
+    if User.query.filter(func.lower(User.email) == email).first():
         return jsonify({
             'error_code': 'USER_EMAIL_CONFLICT',
             'message': 'Email already exists.'
@@ -111,9 +112,11 @@ def login_auth(login_data):
     identity = login_data.get('username') or login_data.get('email')
     password = login_data.get('password')
 
-    # Look up user by username or email
+    identity_clean = identity.strip()
+    # Look up user by username or email (case-insensitive)
     user = User.query.filter(
-        (User.username == identity) | (User.email == identity)
+        (func.lower(User.username) == identity_clean.lower()) | 
+        (func.lower(User.email) == identity_clean.lower())
     ).first()
 
     # Check is_active BEFORE password to avoid leaking that the password is correct

@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from flask_smorest import Blueprint
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -43,16 +44,16 @@ def create_order(order_data):
     user_id = int(get_jwt_identity())
     items = order_data.get('items', [])
 
-    total_amount = 0.00
+    total_amount = Decimal('0.00')
     product_updates = []
 
-    # Validate all items before touching the DB
+    # Validate all items with row-level lock before touching the DB
     for item in items:
         prod_id = item.get('product_id')
         qty = item.get('quantity')
-        # Schema already validates qty > 0 and product_id >= 1, but guard here as defence-in-depth
 
-        product = db.session.get(Product, prod_id)
+        # Pessimistic row-level lock to prevent concurrent overselling
+        product = Product.query.filter_by(id=prod_id).with_for_update().first()
         if not product or not product.is_active:
             return jsonify({
                 "error_code": "PRODUCT_NOT_FOUND",
@@ -76,15 +77,18 @@ def create_order(order_data):
         item_size = item.get('size') or product.size or 'Free Size'
         item_color = item.get('color') or product.color
 
-        # Decrement stock and accumulate total
+        # Decrement stock and calculate exact decimal total
         product.stock -= qty
-        total_amount += float(product.price) * qty
+        item_unit_price = Decimal(str(product.price))
+        item_subtotal = (item_unit_price * Decimal(qty)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        total_amount += item_subtotal
+
         product_updates.append((product, qty, item_size, item_color))
 
     try:
         new_order = Order(
             user_id=user_id,
-            total_amount=total_amount,
+            total_amount=float(total_amount),
             status='pending',
             shipping_address=order_data.get('shipping_address'),
             recipient_name=order_data.get('recipient_name'),
@@ -299,13 +303,13 @@ def update_order_status(update_data, id):
             }), 403
 
     try:
-        # If transitioning to cancelled, restore stock for all items
+        # If transitioning to cancelled, restore stock for all items with row lock
         if new_status == 'cancelled':
             items_to_restore = db.session.execute(
                 order_items.select().where(order_items.c.order_id == id)
             ).fetchall()
             for item in items_to_restore:
-                product = db.session.get(Product, item.product_id)
+                product = Product.query.filter_by(id=item.product_id).with_for_update().first()
                 if product:
                     product.stock += item.quantity
 
@@ -388,13 +392,13 @@ def delete_order(id):
         }), 409
 
     try:
-        # Restore stock for each item in the order
+        # Restore stock for each item in the order with row lock
         items_to_restore = db.session.execute(
             order_items.select().where(order_items.c.order_id == id)
         ).fetchall()
 
         for item in items_to_restore:
-            product = db.session.get(Product, item.product_id)
+            product = Product.query.filter_by(id=item.product_id).with_for_update().first()
             if product:
                 product.stock += item.quantity
 
