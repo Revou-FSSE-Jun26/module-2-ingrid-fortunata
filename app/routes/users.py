@@ -17,6 +17,9 @@ from app.schemas import (
     AuthLoginResponseSchema,
 )
 
+from app.errors import error_response, not_found_response, forbidden_response, unauthorized_response, conflict_response
+from app.validators import validate_user_registration, validate_user_update
+
 users_bp = Blueprint('users', __name__, description='Operations on users')
 
 
@@ -30,18 +33,10 @@ def register_user(user_data):
     email = user_data.get('email', '').strip().lower()
     raw_password = user_data.get('password')
 
-    # Duplicate checks — 409 Conflict (not 400) for existing resources
-    if User.query.filter(func.lower(User.username) == username.lower()).first():
-        return jsonify({
-            'error_code': 'USER_NAME_CONFLICT',
-            'message': 'Username already exists.'
-        }), 409
-
-    if User.query.filter(func.lower(User.email) == email).first():
-        return jsonify({
-            'error_code': 'USER_EMAIL_CONFLICT',
-            'message': 'Email already exists.'
-        }), 409
+    # Duplicate checks via validator
+    err = validate_user_registration(username, email)
+    if err:
+        return err
 
     password_hash = generate_password_hash(raw_password)
 
@@ -57,16 +52,10 @@ def register_user(user_data):
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({
-            'error_code': 'USER_CONFLICT',
-            'message': 'Username or email already exists.'
-        }), 409
+        return conflict_response('USER_CONFLICT', 'Username or email already exists.')
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            'error_code': 'USER_DATABASE_ERROR',
-            'message': 'An error occurred while creating the user.'
-        }), 500
+        return error_response('USER_DATABASE_ERROR', 'An error occurred while creating the user.', 500)
 
     return jsonify({
         'data': new_user.to_dict()
@@ -125,24 +114,15 @@ def get_user_by_id(id):
     requester_id = int(get_jwt_identity())
     requester = db.session.get(User, requester_id)
     if not requester:
-        return jsonify({
-            'error_code': 'USER_NOT_FOUND',
-            'message': 'Authenticated user not found.'
-        }), 401
+        return unauthorized_response('Authenticated user not found.')
 
     is_admin = requester.role in ['superadmin', 'admin']
     if not is_admin and requester_id != id:
-        return jsonify({
-            'error_code': 'USER_FORBIDDEN',
-            'message': 'You do not have permission to view this profile.'
-        }), 403
+        return forbidden_response('You do not have permission to view this profile.', error_code='USER_FORBIDDEN')
 
     user = db.session.get(User, id)
     if not user:
-        return jsonify({
-            'error_code': 'USER_NOT_FOUND',
-            'message': f'User with ID {id} not found.'
-        }), 404
+        return not_found_response('User', id)
 
     return jsonify({
         'data': user.to_dict()
@@ -161,64 +141,28 @@ def update_user_by_id(user_data, id):
     requester_id = int(get_jwt_identity())
     requester = db.session.get(User, requester_id)
     if not requester:
-        return jsonify({
-            'error_code': 'USER_NOT_FOUND',
-            'message': 'Authenticated user not found.'
-        }), 401
+        return unauthorized_response('Authenticated user not found.')
 
     if not requester.is_active:
-        return jsonify({
-            'error_code': 'USER_DEACTIVATED',
-            'message': 'Account is deactivated.'
-        }), 403
-
-    is_superadmin = (requester.role == 'superadmin')
-
-    # Non-superadmins can only update their own profile
-    if not is_superadmin and requester_id != id:
-        return jsonify({
-            'error_code': 'USER_FORBIDDEN',
-            'message': 'You do not have permission to update this profile.'
-        }), 403
-
-    # Non-superadmins cannot modify role or is_active
-    if not is_superadmin and ('role' in user_data or 'is_active' in user_data):
-        return jsonify({
-            'error_code': 'USER_FORBIDDEN',
-            'message': 'Only superadmin can update role and is_active.'
-        }), 403
+        return error_response('USER_DEACTIVATED', 'Account is deactivated.', 403)
 
     user = db.session.get(User, id)
     if not user:
-        return jsonify({
-            'error_code': 'USER_NOT_FOUND',
-            'message': f'User with ID {id} not found.'
-        }), 404
+        return not_found_response('User', id)
 
-    # Validate and apply username update
+    # Validate permissions & unique constraints via validator
+    err = validate_user_update(user, user_data, requester)
+    if err:
+        return err
+
+    # Apply valid updates
     if 'username' in user_data:
-        username = user_data['username'].strip()
-        conflict = User.query.filter(func.lower(User.username) == username.lower(), User.id != id).first()
-        if conflict:
-            return jsonify({
-                'error_code': 'USER_NAME_CONFLICT',
-                'message': 'Username already exists.'
-            }), 409
-        user.username = username
-
-    # Validate and apply email update
+        user.username = user_data['username'].strip()
     if 'email' in user_data:
-        email = user_data['email'].strip().lower()
-        conflict = User.query.filter(func.lower(User.email) == email.lower(), User.id != id).first()
-        if conflict:
-            return jsonify({
-                'error_code': 'USER_EMAIL_CONFLICT',
-                'message': 'Email already exists.'
-            }), 409
-        user.email = email
+        user.email = user_data['email'].strip().lower()
 
     # Superadmin-only updates
-    if is_superadmin:
+    if requester.role == 'superadmin':
         if 'role' in user_data:
             user.role = user_data['role'].strip().lower()
         if 'is_active' in user_data:
@@ -228,16 +172,10 @@ def update_user_by_id(user_data, id):
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({
-            'error_code': 'USER_CONFLICT',
-            'message': 'Username or email already exists.'
-        }), 409
+        return conflict_response('USER_CONFLICT', 'Username or email already exists.')
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            'error_code': 'USER_DATABASE_ERROR',
-            'message': 'An error occurred while updating the user.'
-        }), 500
+        return error_response('USER_DATABASE_ERROR', 'An error occurred while updating the user.', 500)
 
     return jsonify({
         'data': user.to_dict()
@@ -264,10 +202,7 @@ def login_auth(login_data):
     # Both "user not found" and "account deactivated" return the same 401 to prevent
     # user enumeration / account-state leakage
     if not user or not user.is_active:
-        return jsonify({
-            'error_code': 'USER_UNAUTHORIZED',
-            'message': 'Invalid username/email or password.'
-        }), 401
+        return error_response('USER_UNAUTHORIZED', 'Invalid username/email or password.', 401)
 
     # Verify password
     is_password_correct = False
@@ -281,10 +216,7 @@ def login_auth(login_data):
         is_password_correct = (user.password_hash == password)
 
     if not is_password_correct:
-        return jsonify({
-            'error_code': 'USER_UNAUTHORIZED',
-            'message': 'Invalid username/email or password.'
-        }), 401
+        return error_response('USER_UNAUTHORIZED', 'Invalid username/email or password.', 401)
 
     token = create_access_token(identity=str(user.id))
     return jsonify({

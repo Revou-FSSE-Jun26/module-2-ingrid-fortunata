@@ -139,13 +139,12 @@ pytest tests/
 # Run with verbose output (shows individual test names and status)
 pytest tests/ -v
 
-# Run a specific test directory
-pytest tests/models/      # Unit tests for SQLAlchemy models
-pytest tests/schemas/     # Marshmallow schema & validator tests
-pytest tests/routes/      # Endpoint integration tests
-
-# Run a specific test file
-pytest tests/test_demo_summary.py -v
+# Run a specific test directory or file
+pytest tests/models/                 # Unit tests for SQLAlchemy models
+pytest tests/schemas/                # Marshmallow schema & validator tests
+pytest tests/routes/                 # Endpoint integration tests
+pytest tests/test_domain_validators.py -v # Unit tests for reusable business logic validators
+pytest tests/test_demo_summary.py -v # Pytest features demo (match, raises, xfail)
 
 # Run a specific test function by name/keyword
 pytest tests/schemas/test_validators.py -k "test_not_blank" -v
@@ -155,7 +154,7 @@ pytest tests/schemas/test_validators.py -k "test_not_blank" -v
 * **`PASSED`** (Green): All assertions inside the test passed.
 * **`FAILED`** (Red): An assertion or error condition failed (shows readable visual diffs).
 * **`XFAIL`** (Yellow): Expected failure marked via `@pytest.mark.xfail` (does not break CI build).
-* **Summary Bar**: Displays the overall execution time and total counts (e.g., `46 passed, 1 xfailed in 1.03s`).
+* **Summary Bar**: Displays the overall execution time and total counts (e.g., `83 passed, 1 xfailed in 3.03s`).
 
 ---
 
@@ -225,6 +224,7 @@ module-2-ingrid-fortunata/
 │   ├── __init__.py           # Flask app factory; registers blueprints & extensions
 │   ├── auth.py               # @roles_required() decorator for RBAC
 │   ├── config.py             # Config class (DATABASE_URL, JWT, OpenAPI settings)
+│   ├── errors.py             # Standard error response constructors & HTTP error helpers
 │   ├── extensions.py         # Extension instances (db, migrate, api, jwt)
 │   ├── models/               # SQLAlchemy ORM Models
 │   │   ├── __init__.py       # Model exports for migration discovery
@@ -242,11 +242,18 @@ module-2-ingrid-fortunata/
 │   │   ├── category.py       # Category schemas
 │   │   ├── product.py        # Product schemas
 │   │   └── order.py          # Order & OrderItem schemas
+│   ├── validators/           # Reusable Business Logic & Entity Validators
+│   │   ├── __init__.py       # Validator exports
+│   │   ├── user_validators.py     # Username/email uniqueness & update permission safeguards
+│   │   ├── category_validators.py # Category uniqueness & safe deletion checks
+│   │   ├── product_validators.py  # Category active verification & order history checks
+│   │   └── order_validators.py    # Stock locking (with_for_update), transition & cancel rules
 │   └── seed_data.py          # Database seeding script (categories, products, users, orders)
 ├── migrations/               # Alembic database migration history
-├── tests/                    # Modular Pytest Suite
+├── tests/                    # Modular Pytest Suite (84 tests)
 │   ├── conftest.py           # Shared fixtures (app, client, auth headers)
 │   ├── test_demo_summary.py  # Pytest demo (exceptions, match, xfail, summary)
+│   ├── test_domain_validators.py # Unit tests for domain validator functions & error helpers
 │   ├── models/               # Model unit tests (user, product, order)
 │   ├── schemas/              # Schema & validator tests (validation rules, errors)
 │   └── routes/               # Route integration tests (auth, users, products, orders)
@@ -492,6 +499,55 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
     }
   }
   ```
+
+---
+
+### 🛡️ Two-Layer Validation Architecture
+
+The application enforces a clean, decoupled **two-layer validation architecture**:
+
+```
+Client HTTP Request
+       │
+       ▼
+┌────────────────────────────────────────────────────────┐
+│  Layer 1: Schema & Payload Validation                 │
+│  • Framework: Marshmallow & Flask-Smorest              │
+│  • Location: app/schemas/                              │
+│  • Checks: Data types, required fields, enum choices,  │
+│            string lengths, positive values             │
+│  • Failure: 422 Unprocessable Entity                   │
+└────────────────────────┬───────────────────────────────┘
+                         │ (Valid Payload)
+                         ▼
+┌────────────────────────────────────────────────────────┐
+│  Layer 2: Business Logic & Entity Validation           │
+│  • Framework: Custom Validator Functions               │
+│  • Location: app/validators/                           │
+│  • Helpers: app/errors.py                              │
+│  • Checks: Duplicate username/email/category, active   │
+│            status, pessimistic row stock locks,        │
+│            order lifecycle transition rules, deletion  │
+│            constraints                                 │
+│  • Failure: Standard {error_code, message} + 4xx       │
+└────────────────────────┬───────────────────────────────┘
+                         │ (Business Rules Passed)
+                         ▼
+             Database Mutation / Query
+```
+
+1. **Layer 1: Schema Validation (`app/schemas/`)**:
+   - Executes automatically before entering route handlers.
+   - Validates JSON structure, required keys, formatting, string sanitization, and enums.
+   - Handled globally via `@flask_app.errorhandler(422)` in `app/__init__.py`.
+
+2. **Layer 2: Business & Domain Validators (`app/validators/`)**:
+   - Reusable validation functions called inside routes before executing transactions.
+   - `user_validators.py`: Prevents duplicate credentials and unauthorized self-promotions.
+   - `category_validators.py`: Prevents duplicate category names and blocks deleting categories with active products.
+   - `product_validators.py`: Ensures categories are active upon product assignment, and determines soft-delete vs hard-delete based on order history.
+   - `order_validators.py`: Performs row-level pessimistic locking (`with_for_update()`), checks stock levels, validates allowed status transitions, and enforces cancellation rules.
+
 
 ---
 

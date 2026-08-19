@@ -7,6 +7,8 @@ from app.models.product import Product, ProductImage
 from app.models.category import Category
 from app.models.order import Order, order_items
 from app.auth import roles_required, is_admin_user
+from app.errors import error_response, not_found_response, conflict_response
+from app.validators import validate_product_category, validate_product_deletion
 from app.schemas import (
     ProductListResponseSchema,
     ProductCreateInputSchema,
@@ -192,10 +194,7 @@ def get_product_by_id(id):
     product = query.first()
 
     if not product:
-        return jsonify({
-            "error_code": "PRODUCT_NOT_FOUND",
-            "message": f"No product exists with ID {id}."
-        }), 404
+        return not_found_response("Product", id)
 
     prod_dict = product.to_dict()
     prod_dict['images'] = [img.to_dict() for img in product.images]
@@ -211,18 +210,10 @@ def create_product(product_data):
     """Create a new product with up to 3 images."""
     images_data = product_data.pop('images', [])
 
-    if product_data.get('category_id'):
-        category = db.session.get(Category, product_data['category_id'])
-        if not category:
-            return jsonify({
-                "error_code": "CATEGORY_NOT_FOUND",
-                "message": "Category not found."
-            }), 404
-        if not category.is_active:
-            return jsonify({
-                "error_code": "CATEGORY_INACTIVE",
-                "message": "Cannot assign product to an inactive category."
-            }), 400
+    # Validate category if provided
+    category, err = validate_product_category(product_data.get('category_id'))
+    if err:
+        return err
 
     # Auto-generate unique SKU if not provided
     if not product_data.get('sku'):
@@ -249,10 +240,7 @@ def create_product(product_data):
 
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "PRODUCT_DATABASE_ERROR",
-            "message": "An error occurred while creating the product."
-        }), 500
+        return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while creating the product.", 500)
 
     prod_dict = new_product.to_dict()
     prod_dict['images'] = [img.to_dict() for img in new_product.images]
@@ -270,23 +258,12 @@ def update_product(product_data, id):
     """
     product = db.session.get(Product, id)
     if not product:
-        return jsonify({
-            "error_code": "PRODUCT_NOT_FOUND",
-            "message": f"Product with ID {id} not found."
-        }), 404
+        return not_found_response("Product", id)
 
-    if product_data.get('category_id'):
-        category = db.session.get(Category, product_data['category_id'])
-        if not category:
-            return jsonify({
-                "error_code": "CATEGORY_NOT_FOUND",
-                "message": "Category not found."
-            }), 404
-        if not category.is_active:
-            return jsonify({
-                "error_code": "CATEGORY_INACTIVE",
-                "message": "Cannot assign product to an inactive category."
-            }), 400
+    # Validate category if provided
+    category, err = validate_product_category(product_data.get('category_id'))
+    if err:
+        return err
 
     images_data = product_data.pop('images', None)
 
@@ -312,10 +289,7 @@ def update_product(product_data, id):
 
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "PRODUCT_DATABASE_ERROR",
-            "message": "An error occurred while updating the product."
-        }), 500
+        return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while updating the product.", 500)
 
     prod_dict = product.to_dict()
     prod_dict['images'] = [img.to_dict() for img in product.images]
@@ -333,30 +307,12 @@ def delete_product(id):
     """
     product = db.session.get(Product, id)
     if not product:
-        return jsonify({
-            "error_code": "PRODUCT_NOT_FOUND",
-            "message": f"Product with ID {id} not found."
-        }), 404
+        return not_found_response("Product", id)
 
-    # Check for active in-progress orders
-    active_orders_count = db.session.query(order_items).join(
-        Order, order_items.c.order_id == Order.id
-    ).filter(
-        order_items.c.product_id == id,
-        Order.status.in_(['pending', 'paid', 'processing', 'shipped'])
-    ).count()
-
-    if active_orders_count > 0:
-        return jsonify({
-            "error_code": "PRODUCT_CONFLICT",
-            "message": (
-                f"Cannot delete product because it is linked to {active_orders_count} active in-progress order(s). "
-                "Complete or cancel those orders first."
-            )
-        }), 409
-
-    # Check if referenced in historical orders
-    has_any_orders = db.session.query(order_items).filter_by(product_id=id).first() is not None
+    # Check for order history constraints via validator
+    has_any_orders, err = validate_product_deletion(id)
+    if err:
+        return err
 
     try:
         if has_any_orders:
@@ -369,9 +325,6 @@ def delete_product(id):
             db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "PRODUCT_DATABASE_ERROR",
-            "message": "An error occurred while deleting the product."
-        }), 500
+        return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while deleting the product.", 500)
 
     return '', 204

@@ -4,6 +4,9 @@ from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.models.user import User
 from app.extensions import db
 
+from app.errors import unauthorized_response, forbidden_response
+
+
 def roles_required(*roles):
     """Decorator to restrict access to endpoints based on user roles."""
     def decorator(fn):
@@ -15,32 +18,20 @@ def roles_required(*roles):
             # Retrieve identity (user ID) from the JWT
             user_id = get_jwt_identity()
             if not user_id:
-                return jsonify({
-                    "error_code": "UNAUTHORIZED",
-                    "message": "Missing or invalid authorization token."
-                }), 401
+                return unauthorized_response("Missing or invalid authorization token.")
                 
             # Fetch user from the database
             user = db.session.get(User, int(user_id))
             if not user:
-                return jsonify({
-                    "error_code": "UNAUTHORIZED",
-                    "message": "User not found."
-                }), 401
+                return unauthorized_response("User not found.")
                 
             # Verify user is active
             if not user.is_active:
-                return jsonify({
-                    "error_code": "FORBIDDEN",
-                    "message": "Account is deactivated."
-                }), 403
+                return forbidden_response("Account is deactivated.")
 
             # Check if user's role is permitted
             if user.role not in roles:
-                return jsonify({
-                    "error_code": "FORBIDDEN",
-                    "message": "You do not have permission to perform this action."
-                }), 403
+                return forbidden_response("You do not have permission to perform this action.")
                 
             return fn(*args, **kwargs)
         return wrapper
