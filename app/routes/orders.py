@@ -25,26 +25,40 @@ from app.schemas import (
     OrderListResponseSchema,
     OrderUpdateStatusSchema,
 )
+from app.utils.pagination import get_page_params
 
 orders_bp = Blueprint('orders', __name__, description='Operations on orders')
 
-# Pagination defaults and limits
-PAGE_DEFAULT = 1
-PER_PAGE_DEFAULT = 10
-PER_PAGE_MAX = 100
 
+def get_order_detailed_payload(order: Order) -> dict:
+    """Builds full JSON-serializable dictionary for an order with all its items and product metadata."""
+    items_query = db.session.query(
+        order_items.c.product_id,
+        order_items.c.quantity,
+        order_items.c.price_at_purchase,
+        order_items.c.size,
+        order_items.c.color,
+        Product.name,
+        Product.description
+    ).join(
+        Product, order_items.c.product_id == Product.id
+    ).filter(
+        order_items.c.order_id == order.id
+    ).all()
 
-def _safe_page_params():
-    """Parse and clamp pagination query params. Returns (page, per_page) or (None, None)."""
-    raw_page = request.args.get('page', None, type=int)
-    raw_per_page = request.args.get('per_page', None, type=int)
+    detailed_items = [{
+        "product_id": row.product_id,
+        "name": row.name,
+        "description": row.description,
+        "quantity": row.quantity,
+        "price_at_purchase": float(row.price_at_purchase),
+        "size": row.size,
+        "color": row.color
+    } for row in items_query]
 
-    if raw_page is None and raw_per_page is None:
-        return None, None
-
-    page = max(PAGE_DEFAULT, raw_page) if raw_page is not None else PAGE_DEFAULT
-    per_page = min(PER_PAGE_MAX, max(1, raw_per_page)) if raw_per_page is not None else PER_PAGE_DEFAULT
-    return page, per_page
+    order_payload = order.to_dict()
+    order_payload['items'] = detailed_items
+    return order_payload
 
 
 @orders_bp.route('/orders', methods=['POST'])
@@ -89,23 +103,7 @@ def create_order(order_data):
         db.session.rollback()
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while placing the order.", 500)
 
-    # Build detailed response
-    detailed_items = []
-    for product, qty, item_size, item_color in product_updates:
-        detailed_items.append({
-            "product_id": product.id,
-            "name": product.name,
-            "description": product.description,
-            "quantity": qty,
-            "price_at_purchase": float(product.price),
-            "size": item_size,
-            "color": item_color
-        })
-
-    order_payload = new_order.to_dict()
-    order_payload['items'] = detailed_items
-
-    return jsonify({"data": order_payload}), 201
+    return jsonify({"data": get_order_detailed_payload(new_order)}), 201
 
 
 @orders_bp.route('/orders', methods=['GET'])
@@ -178,7 +176,7 @@ def get_orders():
     # Order newest first (fixed)
     query = query.order_by(Order.created_at.desc(), Order.id.desc())
 
-    page, per_page = _safe_page_params()
+    page, per_page = get_page_params()
 
     if page is not None:
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -212,34 +210,7 @@ def get_order_by_id(id):
     if not order or (not is_admin and order.user_id != user_id):
         return not_found_response("Order", id)
 
-    items_query = db.session.query(
-        order_items.c.product_id,
-        order_items.c.quantity,
-        order_items.c.price_at_purchase,
-        order_items.c.size,
-        order_items.c.color,
-        Product.name,
-        Product.description
-    ).join(
-        Product, order_items.c.product_id == Product.id
-    ).filter(
-        order_items.c.order_id == id
-    ).all()
-
-    detailed_items = [{
-        "product_id": row.product_id,
-        "name": row.name,
-        "description": row.description,
-        "quantity": row.quantity,
-        "price_at_purchase": float(row.price_at_purchase),
-        "size": row.size,
-        "color": row.color
-    } for row in items_query]
-
-    order_payload = order.to_dict()
-    order_payload['items'] = detailed_items
-
-    return jsonify({"data": order_payload}), 200
+    return jsonify({"data": get_order_detailed_payload(order)}), 200
 
 
 @orders_bp.route('/orders/<int:id>', methods=['PATCH'])
@@ -294,35 +265,7 @@ def update_order_status(update_data, id):
         db.session.rollback()
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while updating the order status.", 500)
 
-    # Build response with items
-    items_query = db.session.query(
-        order_items.c.product_id,
-        order_items.c.quantity,
-        order_items.c.price_at_purchase,
-        order_items.c.size,
-        order_items.c.color,
-        Product.name,
-        Product.description
-    ).join(
-        Product, order_items.c.product_id == Product.id
-    ).filter(
-        order_items.c.order_id == id
-    ).all()
-
-    detailed_items = [{
-        "product_id": row.product_id,
-        "name": row.name,
-        "description": row.description,
-        "quantity": row.quantity,
-        "price_at_purchase": float(row.price_at_purchase),
-        "size": row.size,
-        "color": row.color
-    } for row in items_query]
-
-    order_payload = order.to_dict()
-    order_payload['items'] = detailed_items
-
-    return jsonify({"data": order_payload}), 200
+    return jsonify({"data": get_order_detailed_payload(order)}), 200
 
 
 @orders_bp.route('/orders/<int:id>', methods=['DELETE'])
@@ -380,32 +323,4 @@ def delete_order(id):
         db.session.rollback()
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while cancelling the order.", 500)
 
-    # Build response with items
-    items_query = db.session.query(
-        order_items.c.product_id,
-        order_items.c.quantity,
-        order_items.c.price_at_purchase,
-        order_items.c.size,
-        order_items.c.color,
-        Product.name,
-        Product.description
-    ).join(
-        Product, order_items.c.product_id == Product.id
-    ).filter(
-        order_items.c.order_id == id
-    ).all()
-
-    detailed_items = [{
-        "product_id": row.product_id,
-        "name": row.name,
-        "description": row.description,
-        "quantity": row.quantity,
-        "price_at_purchase": float(row.price_at_purchase),
-        "size": row.size,
-        "color": row.color
-    } for row in items_query]
-
-    order_payload = order.to_dict()
-    order_payload['items'] = detailed_items
-
-    return jsonify({"data": order_payload}), 200
+    return jsonify({"data": get_order_detailed_payload(order)}), 200

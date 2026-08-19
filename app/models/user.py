@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from werkzeug.security import generate_password_hash, check_password_hash
 from app.extensions import db
 
 class User(db.Model):
@@ -12,9 +13,21 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True, server_default='true', nullable=False)
 
-
     # Relationship to Order
     orders_rel = db.relationship('Order', backref='user', lazy=True)
+
+    def set_password(self, raw_password: str) -> None:
+        """Hash and set user's password."""
+        self.password_hash = generate_password_hash(raw_password)
+
+    def check_password(self, raw_password: str) -> bool:
+        """Verify user's password with support for hashed and plaintext fallback."""
+        if self.password_hash.startswith(('pbkdf2:', 'scrypt:', 'bcrypt:')):
+            try:
+                return check_password_hash(self.password_hash, raw_password)
+            except ValueError:
+                return False
+        return self.password_hash == raw_password
 
     def to_dict(self):
         return {
@@ -25,4 +38,5 @@ class User(db.Model):
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
 
