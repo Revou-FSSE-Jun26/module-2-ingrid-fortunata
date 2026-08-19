@@ -74,7 +74,8 @@ def get_categories():
             elif is_active_param.lower() == 'false':
                 query = query.filter_by(is_active=False)
 
-    categories = query.all()
+    # Listed alphabetically by name
+    categories = query.order_by(Category.name.asc()).all()
     return jsonify({
         "data": [c.to_dict() for c in categories]
     }), 200

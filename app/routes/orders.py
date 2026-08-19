@@ -162,7 +162,51 @@ def get_orders():
     if status:
         query = query.filter(Order.status == status.strip().lower())
 
-    # Order newest first
+    # Categorized order tracking filters
+    order_id = request.args.get('order_id', None, type=int)
+    if order_id is not None:
+        query = query.filter(Order.id == order_id)
+
+    recipient_name = request.args.get('recipient_name')
+    if recipient_name:
+        query = query.filter(Order.recipient_name.ilike(f'%{recipient_name.strip()}%'))
+
+    recipient_phone = request.args.get('recipient_phone')
+    if recipient_phone:
+        query = query.filter(Order.recipient_phone.ilike(f'%{recipient_phone.strip()}%'))
+
+    shipping_address = request.args.get('shipping_address')
+    if shipping_address:
+        query = query.filter(Order.shipping_address.ilike(f'%{shipping_address.strip()}%'))
+
+    customer_name = request.args.get('customer_name') or request.args.get('username')
+    if customer_name and user.role in ['superadmin', 'admin']:
+        query = query.join(User, Order.user_id == User.id).filter(
+            db.or_(
+                User.username.ilike(f'%{customer_name.strip()}%'),
+                User.email.ilike(f'%{customer_name.strip()}%')
+            )
+        )
+
+    # General search across all fields (ID, recipient, phone, address, username, email)
+    search = request.args.get('search')
+    if search:
+        search_term = f'%{search.strip()}%'
+        search_filters = [
+            Order.recipient_name.ilike(search_term),
+            Order.recipient_phone.ilike(search_term),
+            Order.shipping_address.ilike(search_term),
+            db.cast(Order.id, db.String).ilike(search_term)
+        ]
+        if user.role in ['superadmin', 'admin']:
+            query = query.join(User, Order.user_id == User.id)
+            search_filters.extend([
+                User.username.ilike(search_term),
+                User.email.ilike(search_term)
+            ])
+        query = query.filter(db.or_(*search_filters))
+
+    # Order newest first (fixed)
     query = query.order_by(Order.created_at.desc(), Order.id.desc())
 
     page, per_page = _safe_page_params()

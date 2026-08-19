@@ -529,8 +529,21 @@ class NewEndpointsTestCase(unittest.TestCase):
         prices_desc = [p['price'] for p in data_sort_desc]
         self.assertEqual(prices_desc, sorted(prices_desc, reverse=True))
 
+        # 5. Sort by oldest (updated_at ascending)
+        res_sort_oldest = self.client.get('/products?sort_by=oldest')
+        self.assertEqual(res_sort_oldest.status_code, 200)
+        data_sort_oldest = res_sort_oldest.get_json()['data']
+        dates_oldest = [p['updated_at'] for p in data_sort_oldest]
+        self.assertEqual(dates_oldest, sorted(dates_oldest))
+
+        # 6. Categories listed alphabetically
+        res_cats = self.client.get('/categories')
+        self.assertEqual(res_cats.status_code, 200)
+        cat_names = [c['name'] for c in res_cats.get_json()['data']]
+        self.assertEqual(cat_names, sorted(cat_names))
+
     def test_orders_status_filter(self):
-        """Test GET /orders filtering by status."""
+        """Test GET /orders filtering by status and categorized search tracking."""
         customer_headers = self._get_customer_headers()
 
         # 1. Get orders filtered by status 'pending'
@@ -544,6 +557,18 @@ class NewEndpointsTestCase(unittest.TestCase):
         self.assertEqual(res_delivered.status_code, 200)
         for order in res_delivered.get_json()['data']:
             self.assertEqual(order['status'], 'delivered')
+
+        # 3. Categorized search: recipient_name
+        res_name_search = self.client.get('/orders?recipient_name=Alice', headers=customer_headers)
+        self.assertEqual(res_name_search.status_code, 200)
+        for order in res_name_search.get_json()['data']:
+            self.assertIn('alice', order['recipient_name'].lower())
+
+        # 4. General search: phone or address
+        res_gen_search = self.client.get('/orders?search=Sudirman', headers=customer_headers)
+        self.assertEqual(res_gen_search.status_code, 200)
+        for order in res_gen_search.get_json()['data']:
+            self.assertIn('sudirman', order['shipping_address'].lower())
 
     def test_role_aware_active_inactive_visibility(self):
         """Test that customers see only active categories/products, while admins see all / can filter."""

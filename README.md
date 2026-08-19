@@ -565,6 +565,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 - **Description**: Retrieve clothing products with pagination, sorting, and fashion attribute filters.
   - **Customers**: Strictly see **only active products** (`is_active = true`) belonging to active (or uncategorized) categories.
   - **Admins / Sellers**: View all products by default (including inactive/retired items) and can filter by `is_active`.
+  - **Default Ordering**: Products are listed **newest first** based on `updated_at` timestamp (so newly added or recently updated products surface at the top).
 - **Query Parameters**:
   | Parameter | Type | Options / Enums | Description |
   | :--- | :--- | :--- | :--- |
@@ -575,7 +576,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
   | `material` | String | Case-insensitive substring | Filter by fabric (e.g., `Cotton`) |
   | `min_price` | Float | `>= 0` | Minimum unit price filter |
   | `max_price` | Float | `>= min_price` | Maximum unit price filter |
-  | `sort_by` | String | `price_asc`, `price_desc`, `newest`, `name_asc` | Catalog sorting order (Default: `id` asc) |
+  | `sort_by` | String | `newest`, `oldest`, `price_asc`, `price_desc`, `name_asc`, `name_desc` | Catalog sorting order (Default: `newest` by `updated_at`) |
   | `is_active` | String | `true`, `false`, `all` | **(Admin only)** Filter active/inactive products |
   | `search` | String | Free-text string | Search across product `name` and `description` |
   | `page` | Integer | Min `1` | Page number for pagination |
@@ -660,7 +661,7 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 
 ##### `GET /categories`
 - **Auth**: Optional (JWT for admin features)
-- **Description**: Retrieve clothing categories.
+- **Description**: Retrieve clothing categories listed **alphabetically (A–Z) by name**.
   - **Customers**: Strictly see **only active categories** (`is_active = true`).
   - **Admins / Sellers**: View all categories by default and can filter with `?is_active=true|false`.
 - **Query Parameters**:
@@ -694,10 +695,17 @@ Following standard REST architectural principles, the **`PUT`** HTTP method repr
 ##### `GET /orders`
 - **Auth**: JWT Required
 - **Permissions**: Customers receive **only their own** orders. Admins/superadmins view all system orders.
+- **Default Ordering**: Orders are always listed **newest first** (`created_at` descending).
 - **Query Parameters**:
   | Parameter | Type | Options / Enums | Description |
   | :--- | :--- | :--- | :--- |
   | `status` | String | `pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled` | Filter orders by lifecycle status |
+  | `order_id` | Integer | Valid Order ID | Track order by exact order ID |
+  | `recipient_name` | String | Substring search | Search orders by recipient full name |
+  | `recipient_phone` | String | Substring search | Search orders by recipient phone number |
+  | `shipping_address` | String | Substring search | Search orders by delivery address |
+  | `customer_name` | String | Substring search | **(Admin only)** Search orders by customer username/email |
+  | `search` | String | Free-text string | General search across order ID, recipient name, phone, address, and user credentials |
   | `page` | Integer | Min `1` | Page number for pagination |
   | `per_page` | Integer | Min `1`, Max `100` (Default: `10`) | Orders per page |
 
