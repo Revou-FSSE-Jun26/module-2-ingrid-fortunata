@@ -3,6 +3,8 @@ import json
 from app import create_app
 from app.extensions import db
 from app.models.user import User
+from app.models.category import Category
+from app.models.product import Product
 
 class NewEndpointsTestCase(unittest.TestCase):
     def setUp(self):
@@ -543,9 +545,43 @@ class NewEndpointsTestCase(unittest.TestCase):
         for order in res_delivered.get_json()['data']:
             self.assertEqual(order['status'], 'delivered')
 
+    def test_role_aware_active_inactive_visibility(self):
+        """Test that customers see only active categories/products, while admins see all / can filter."""
+        admin_headers = self._get_admin_headers()
+        customer_headers = self._get_customer_headers()
+
+        # 1. Customer GET /categories -> only active
+        res_cust_cats = self.client.get('/categories', headers=customer_headers)
+        self.assertEqual(res_cust_cats.status_code, 200)
+        for cat in res_cust_cats.get_json()['data']:
+            self.assertTrue(cat['is_active'])
+
+        # 2. Admin GET /categories -> shows all by default
+        res_admin_cats = self.client.get('/categories', headers=admin_headers)
+        self.assertEqual(res_admin_cats.status_code, 200)
+        admin_cat_ids = [c['id'] for c in res_admin_cats.get_json()['data']]
+        # Inactive category from seed data should be present in admin list
+        inactive_cat = Category.query.filter_by(is_active=False).first()
+        if inactive_cat:
+            self.assertIn(inactive_cat.id, admin_cat_ids)
+
+        # 3. Customer GET /products -> only active products
+        res_cust_prods = self.client.get('/products', headers=customer_headers)
+        self.assertEqual(res_cust_prods.status_code, 200)
+        for prod in res_cust_prods.get_json()['data']:
+            self.assertTrue(prod['is_active'])
+
+        # 4. Admin GET /products?is_active=false -> returns inactive products
+        res_admin_inactive = self.client.get('/products?is_active=false', headers=admin_headers)
+        self.assertEqual(res_admin_inactive.status_code, 200)
+        inactive_prods = res_admin_inactive.get_json()['data']
+        for prod in inactive_prods:
+            self.assertFalse(prod['is_active'])
+
 
 if __name__ == '__main__':
     unittest.main()
+
 
 
 

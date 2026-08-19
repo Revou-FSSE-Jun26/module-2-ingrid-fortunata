@@ -6,7 +6,7 @@ from app.extensions import db
 from app.models.product import Product, ProductImage
 from app.models.category import Category
 from app.models.order import Order, order_items
-from app.auth import roles_required
+from app.auth import roles_required, is_admin_user
 from app.schemas import (
     ProductListResponseSchema,
     ProductCreateInputSchema,
@@ -58,6 +58,8 @@ def get_all_products():
         ProductImage.is_primary == True
     ).subquery()
 
+    is_admin = is_admin_user()
+
     # Build base query
     products_query = db.session.query(
         Product,
@@ -66,10 +68,22 @@ def get_all_products():
         Category, Product.category_id == Category.id, isouter=True
     ).outerjoin(
         primary_image_subquery, Product.id == primary_image_subquery.c.product_id
-    ).filter(
-        Product.is_active == True,
-        (Category.id == None) | (Category.is_active == True)
     )
+
+    if not is_admin:
+        # Public / customer view: strictly active products in active (or uncategorized) categories
+        products_query = products_query.filter(
+            Product.is_active == True,
+            (Category.id == None) | (Category.is_active == True)
+        )
+    else:
+        # Admin / seller view: shows all by default, or filters by is_active query param
+        is_active_param = request.args.get('is_active')
+        if is_active_param is not None:
+            if is_active_param.lower() == 'true':
+                products_query = products_query.filter(Product.is_active == True)
+            elif is_active_param.lower() == 'false':
+                products_query = products_query.filter(Product.is_active == False)
 
     # Fashion-specific filters
     gender = request.args.get('gender')
@@ -159,14 +173,21 @@ def get_all_products():
 @products_bp.route('/products/<int:id>', methods=['GET'])
 @products_bp.response(200, ProductDetailResponseSchema)
 def get_product_by_id(id):
-    """Retrieves a single active product by ID along with all images."""
-    product = Product.query.join(
+    """Retrieves a single product by ID.
+    Customers can only view active products. Admins/superadmins can view any product.
+    """
+    is_admin = is_admin_user()
+    query = Product.query.join(
         Category, Product.category_id == Category.id, isouter=True
-    ).filter(
-        Product.id == id,
-        Product.is_active == True,
-        (Category.id == None) | (Category.is_active == True)
-    ).first()
+    ).filter(Product.id == id)
+
+    if not is_admin:
+        query = query.filter(
+            Product.is_active == True,
+            (Category.id == None) | (Category.is_active == True)
+        )
+
+    product = query.first()
 
     if not product:
         return jsonify({
