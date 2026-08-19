@@ -1,44 +1,64 @@
-from marshmallow import Schema, fields, ValidationError, validates_schema, validate
+from marshmallow import Schema, fields, ValidationError, validates, validates_schema, validate
+
+
+def not_blank(value):
+    """Reject strings that are empty or whitespace-only."""
+    if not value or not value.strip():
+        raise ValidationError("Field cannot be blank or whitespace only.")
+
 
 class UserSchema(Schema):
     id = fields.Int(dump_only=True)
-    username = fields.Str(required=True)
-    email = fields.Email(required=True)
-    role = fields.Str()
-    is_active = fields.Bool()
+    username = fields.Str(dump_only=True)
+    email = fields.Email(dump_only=True)
+    role = fields.Str(dump_only=True)
+    is_active = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
 
-class UserRegisterInputSchema(Schema):
-    username = fields.Str(required=True)
-    email = fields.Email(required=True)
-    password = fields.Str(load_only=True)
-    password_hash = fields.Str(load_only=True)
-    role = fields.Str(load_default="customer", validate=validate.OneOf(["superadmin", "admin", "customer"]))
 
-    @validates_schema
-    def validate_password_presence(self, data, **kwargs):
-        if not data.get("password") and not data.get("password_hash"):
-            raise ValidationError("Either 'password' or 'password_hash' must be provided.")
+class UserRegisterInputSchema(Schema):
+    username = fields.Str(required=True, validate=[validate.Length(min=1, max=50), not_blank])
+    email = fields.Email(required=True)
+    password = fields.Str(
+        required=True,
+        load_only=True,
+        validate=[validate.Length(min=6), not_blank]
+    )
+    # role is intentionally NOT exposed — all public registrations default to 'customer'
+    # role assignment is a privileged operation done separately by admins
+
+    @validates("username")
+    def validate_username_no_spaces(self, value, **kwargs):
+        if " " in value:
+            raise ValidationError("Username cannot contain spaces.")
+
 
 class UserRegisterResponseSchema(Schema):
     data = fields.Nested(UserSchema, dump_only=True)
 
+
 class UserLoginInputSchema(Schema):
-    username = fields.Str()
-    email = fields.Str()
-    password = fields.Str(required=True)
+    # Accept either username or email — use Str for username, Email for email
+    username = fields.Str(validate=[validate.Length(min=1), not_blank])
+    email = fields.Email()
+    password = fields.Str(required=True, load_only=True, validate=[validate.Length(min=1), not_blank])
 
     @validates_schema
     def validate_identity_presence(self, data, **kwargs):
         if not data.get("username") and not data.get("email"):
-            raise ValidationError("Either 'username' or 'email' must be provided.")
+            raise ValidationError(
+                {"identity": ["Either 'username' or 'email' must be provided."]}
+            )
+
 
 class UserGetResponseSchema(Schema):
     data = fields.Nested(UserSchema, dump_only=True)
 
+
 class AuthLoginResponseDataSchema(Schema):
     token = fields.Str(dump_only=True)
     user = fields.Nested(UserSchema, dump_only=True)
+
 
 class AuthLoginResponseSchema(Schema):
     data = fields.Nested(AuthLoginResponseDataSchema, dump_only=True)

@@ -37,15 +37,15 @@ class NewEndpointsTestCase(unittest.TestCase):
     def test_product_crud(self):
         headers = self._get_admin_headers()
 
-        # Test create validation fail (negative price)
+        # Test create validation fail (negative price) - schema returns 422
         bad_payload = {"name": "Broken", "price": -5, "stock": 10, "color": "Black"}
         res = self.client.post('/products', json=bad_payload, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
-        # Test create validation fail (missing color)
+        # Test create validation fail (missing color) - schema returns 422
         bad_payload_no_color = {"name": "No Color Shirt", "price": 19.90, "stock": 10}
         res = self.client.post('/products', json=bad_payload_no_color, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
         # Test create success with defaults (size -> Free Size, gender -> Unisex, auto SKU)
         payload = {"name": "Unisex Shoulder Bag", "price": 24.90, "stock": 50, "color": "Olive"}
@@ -77,7 +77,7 @@ class NewEndpointsTestCase(unittest.TestCase):
     def test_product_images_crud_and_validation(self):
         headers = self._get_admin_headers()
 
-        # Test validation - over 3 images
+        # Test validation - over 3 images (schema validation = 422)
         bad_payload = {
             "name": "Broken Mouse",
             "price": 10.00,
@@ -91,9 +91,9 @@ class NewEndpointsTestCase(unittest.TestCase):
             ]
         }
         res = self.client.post('/products', json=bad_payload, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
-        # Test validation - size limit
+        # Test validation - size limit (schema validation = 422)
         huge_payload = {
             "name": "Broken Mouse",
             "price": 10.00,
@@ -102,9 +102,9 @@ class NewEndpointsTestCase(unittest.TestCase):
             "images": [{"image_base64": "a" * 2000000}]
         }
         res = self.client.post('/products', json=huge_payload, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
-        # Test validation - multiple primary flags
+        # Test validation - multiple primary flags (schema validation = 422)
         double_primary_payload = {
             "name": "Double Mouse",
             "price": 10.00,
@@ -116,7 +116,7 @@ class NewEndpointsTestCase(unittest.TestCase):
             ]
         }
         res = self.client.post('/products', json=double_primary_payload, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
         # Test create success - defaults first to primary
         success_payload = {
@@ -260,14 +260,14 @@ class NewEndpointsTestCase(unittest.TestCase):
         token = res.get_json()['data']['token']
         headers = {"Authorization": f"Bearer {token}"}
 
-        # Test quantity zero or negative
+        # Test quantity zero or negative (schema validation = 422)
         bad_payload = {"items": [{"product_id": 1, "quantity": 0}]}
         res = self.client.post('/orders', json=bad_payload, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
         bad_payload_neg = {"items": [{"product_id": 1, "quantity": -5}]}
         res = self.client.post('/orders', json=bad_payload_neg, headers=headers)
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 422)
 
     def test_rbac_denied_for_customer(self):
         headers = self._get_customer_headers()
