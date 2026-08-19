@@ -7,6 +7,18 @@ from app.extensions import db
 from app.models.order import Order, order_items
 from app.models.product import Product
 from app.models.user import User
+from app.errors import (
+    error_response,
+    not_found_response,
+    conflict_response,
+    forbidden_response,
+    unauthorized_response,
+)
+from app.validators import (
+    validate_and_lock_order_items,
+    validate_order_status_transition,
+    validate_order_cancellation,
+)
 from app.schemas import (
     OrderCreateInputSchema,
     OrderResponseWrapperSchema,
@@ -43,47 +55,10 @@ def create_order(order_data):
     """Place a new order linked to the logged-in user."""
     user_id = int(get_jwt_identity())
     items = order_data.get('items', [])
-
-    total_amount = Decimal('0.00')
-    product_updates = []
-
     # Validate all items with row-level lock before touching the DB
-    for item in items:
-        prod_id = item.get('product_id')
-        qty = item.get('quantity')
-
-        # Pessimistic row-level lock to prevent concurrent overselling
-        product = Product.query.filter_by(id=prod_id).with_for_update().first()
-        if not product or not product.is_active:
-            return jsonify({
-                "error_code": "PRODUCT_NOT_FOUND",
-                "message": f"Product with ID {prod_id} not found or is inactive."
-            }), 404
-
-        if product.price is None or float(product.price) <= 0:
-            return jsonify({
-                "error_code": "PRODUCT_PRICE_VALIDATION_ERROR",
-                "message": f"Price for product '{product.name}' is invalid (zero or negative)."
-            }), 400
-
-        if product.stock is None or product.stock < qty:
-            return jsonify({
-                "error_code": "PRODUCT_STOCK_VALIDATION_ERROR",
-                "message": f"Insufficient stock for product '{product.name}'. "
-                           f"Requested: {qty}, Available: {product.stock or 0}."
-            }), 400
-
-        # Sync size and color with product defaults if not explicitly provided
-        item_size = item.get('size') or product.size or 'Free Size'
-        item_color = item.get('color') or product.color
-
-        # Decrement stock and calculate exact decimal total
-        product.stock -= qty
-        item_unit_price = Decimal(str(product.price))
-        item_subtotal = (item_unit_price * Decimal(qty)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        total_amount += item_subtotal
-
-        product_updates.append((product, qty, item_size, item_color))
+    product_updates, total_amount, err = validate_and_lock_order_items(items)
+    if err:
+        return err
 
     try:
         new_order = Order(
@@ -112,10 +87,7 @@ def create_order(order_data):
 
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "ORDER_DATABASE_ERROR",
-            "message": "An error occurred while placing the order."
-        }), 500
+        return error_response("ORDER_DATABASE_ERROR", "An error occurred while placing the order.", 500)
 
     # Build detailed response
     detailed_items = []
@@ -147,10 +119,7 @@ def get_orders():
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     if not user:
-        return jsonify({
-            "error_code": "USER_NOT_FOUND",
-            "message": "Authenticated user not found."
-        }), 401
+        return unauthorized_response("Authenticated user not found.")
 
     if user.role in ['superadmin', 'admin']:
         query = Order.query
@@ -236,18 +205,12 @@ def get_order_by_id(id):
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     if not user:
-        return jsonify({
-            "error_code": "USER_NOT_FOUND",
-            "message": "Authenticated user not found."
-        }), 401
+        return unauthorized_response("Authenticated user not found.")
 
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user_id):
-        return jsonify({
-            "error_code": "ORDER_NOT_FOUND",
-            "message": f"Order with ID {id} not found."
-        }), 404
+        return not_found_response("Order", id)
 
     items_query = db.session.query(
         order_items.c.product_id,
@@ -279,23 +242,6 @@ def get_order_by_id(id):
     return jsonify({"data": order_payload}), 200
 
 
-# Valid status transitions for each current status
-STATUS_TRANSITIONS = {
-    'pending':    ['paid', 'cancelled'],
-    'paid':       ['processing', 'cancelled'],
-    'processing': ['shipped'],
-    'shipped':    ['delivered'],
-    'delivered':  [],
-    'cancelled':  [],
-}
-
-# Statuses that customers are allowed to trigger themselves
-CUSTOMER_ALLOWED_TRANSITIONS = {
-    'pending': ['paid', 'cancelled'],
-    'paid':    ['cancelled'],
-}
-
-
 @orders_bp.route('/orders/<int:id>', methods=['PATCH'])
 @jwt_required()
 @orders_bp.arguments(OrderUpdateStatusSchema, location='json')
@@ -311,48 +257,20 @@ def update_order_status(update_data, id):
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     if not user:
-        return jsonify({
-            "error_code": "USER_NOT_FOUND",
-            "message": "Authenticated user not found."
-        }), 401
+        return unauthorized_response("Authenticated user not found.")
 
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user_id):
-        return jsonify({
-            "error_code": "ORDER_NOT_FOUND",
-            "message": f"Order with ID {id} not found."
-        }), 404
+        return not_found_response("Order", id)
 
     new_status = update_data['status']
     current_status = order.status
 
-    # No-op: already on requested status
-    if current_status == new_status:
-        return jsonify({
-            "error_code": "ORDER_STATUS_NO_CHANGE",
-            "message": f"Order is already in '{current_status}' status."
-        }), 409
-
-    # Check if the transition is globally valid
-    allowed_next = STATUS_TRANSITIONS.get(current_status, [])
-    if new_status not in allowed_next:
-        return jsonify({
-            "error_code": "ORDER_INVALID_TRANSITION",
-            "message": (
-                f"Cannot transition order from '{current_status}' to '{new_status}'. "
-                f"Allowed next status(es): {allowed_next if allowed_next else 'none'}."
-            )
-        }), 409
-
-    # Role-based restriction: customers have limited transitions
-    if not is_admin:
-        customer_allowed = CUSTOMER_ALLOWED_TRANSITIONS.get(current_status, [])
-        if new_status not in customer_allowed:
-            return jsonify({
-                "error_code": "ORDER_FORBIDDEN_TRANSITION",
-                "message": f"Customers cannot change order status from '{current_status}' to '{new_status}'."
-            }), 403
+    # Transition validation via validator
+    err = validate_order_status_transition(current_status, new_status, is_admin)
+    if err:
+        return err
 
     try:
         # If transitioning to shipped, record tracking number
@@ -374,10 +292,7 @@ def update_order_status(update_data, id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "ORDER_DATABASE_ERROR",
-            "message": "An error occurred while updating the order status."
-        }), 500
+        return error_response("ORDER_DATABASE_ERROR", "An error occurred while updating the order status.", 500)
 
     # Build response with items
     items_query = db.session.query(
@@ -410,10 +325,6 @@ def update_order_status(update_data, id):
     return jsonify({"data": order_payload}), 200
 
 
-# Statuses that are still cancellable
-CANCELLABLE_STATUSES = {'pending', 'paid'}
-
-
 @orders_bp.route('/orders/<int:id>', methods=['DELETE'])
 @jwt_required()
 @orders_bp.response(200, OrderResponseWrapperSchema)
@@ -427,27 +338,17 @@ def delete_order(id):
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     if not user:
-        return jsonify({
-            "error_code": "USER_NOT_FOUND",
-            "message": "Authenticated user not found."
-        }), 401
+        return unauthorized_response("Authenticated user not found.")
 
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user_id):
-        return jsonify({
-            "error_code": "ORDER_NOT_FOUND",
-            "message": f"Order with ID {id} not found."
-        }), 404
+        return not_found_response("Order", id)
 
-    if order.status not in CANCELLABLE_STATUSES:
-        return jsonify({
-            "error_code": "ORDER_CANNOT_BE_CANCELLED",
-            "message": (
-                f"Order with status '{order.status}' cannot be cancelled. "
-                "Only orders with status 'pending' or 'paid' can be cancelled."
-            )
-        }), 409
+    # Validate cancellation eligibility
+    err = validate_order_cancellation(order.status)
+    if err:
+        return err
 
     body = request.get_json(silent=True) or {}
     cancellation_reason = body.get('cancellation_reason') or request.args.get('cancellation_reason')
@@ -477,10 +378,7 @@ def delete_order(id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "ORDER_DATABASE_ERROR",
-            "message": "An error occurred while cancelling the order."
-        }), 500
+        return error_response("ORDER_DATABASE_ERROR", "An error occurred while cancelling the order.", 500)
 
     # Build response with items
     items_query = db.session.query(

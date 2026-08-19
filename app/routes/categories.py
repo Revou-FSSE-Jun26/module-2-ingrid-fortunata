@@ -14,6 +14,9 @@ from app.schemas import (
     CategoryListResponseSchema,
 )
 
+from app.errors import error_response, not_found_response, conflict_response
+from app.validators import validate_category_name_unique, validate_category_deletion
+
 categories_bp = Blueprint('categories', __name__, description='Operations on categories')
 
 
@@ -24,14 +27,11 @@ categories_bp = Blueprint('categories', __name__, description='Operations on cat
 def create_category(category_data):
     """Create a new category."""
     name = category_data.get('name', '').strip()
-    # Normalize name before uniqueness check
     category_data['name'] = name
 
-    if Category.query.filter_by(name=name).first():
-        return jsonify({
-            "error_code": "CATEGORY_CONFLICT",
-            "message": "Category name already exists."
-        }), 409
+    err = validate_category_name_unique(name)
+    if err:
+        return err
 
     try:
         new_cat = Category(**category_data)
@@ -39,16 +39,10 @@ def create_category(category_data):
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "CATEGORY_CONFLICT",
-            "message": "Category name already exists."
-        }), 409
+        return conflict_response("CATEGORY_CONFLICT", "Category name already exists.")
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "CATEGORY_DATABASE_ERROR",
-            "message": "An error occurred while creating the category."
-        }), 500
+        return error_response("CATEGORY_DATABASE_ERROR", "An error occurred while creating the category.", 500)
 
     return jsonify({
         "data": new_cat.to_dict()
@@ -96,10 +90,7 @@ def get_category_by_id(id):
 
     category = query.first()
     if not category:
-        return jsonify({
-            "error_code": "CATEGORY_NOT_FOUND",
-            "message": f"Category with ID {id} not found."
-        }), 404
+        return not_found_response("Category", id)
 
     cat_dict = category.to_dict()
     if not is_admin:
@@ -122,21 +113,16 @@ def update_category(category_data, id):
     """
     category = db.session.get(Category, id)
     if not category:
-        return jsonify({
-            "error_code": "CATEGORY_NOT_FOUND",
-            "message": f"Category with ID {id} not found."
-        }), 404
+        return not_found_response("Category", id)
 
     name = category_data.get('name')
     if name:
         name = name.strip()
         category_data['name'] = name
         if name != category.name:
-            if Category.query.filter_by(name=name).first():
-                return jsonify({
-                    "error_code": "CATEGORY_CONFLICT",
-                    "message": "Category name already exists."
-                }), 409
+            err = validate_category_name_unique(name, exclude_id=id)
+            if err:
+                return err
 
     try:
         for key, val in category_data.items():
@@ -144,16 +130,10 @@ def update_category(category_data, id):
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "CATEGORY_CONFLICT",
-            "message": "Category name already exists."
-        }), 409
+        return conflict_response("CATEGORY_CONFLICT", "Category name already exists.")
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "CATEGORY_DATABASE_ERROR",
-            "message": "An error occurred while updating the category."
-        }), 500
+        return error_response("CATEGORY_DATABASE_ERROR", "An error occurred while updating the category.", 500)
 
     return jsonify({
         "data": category.to_dict()
@@ -170,32 +150,18 @@ def delete_category(id):
     """
     category = db.session.get(Category, id)
     if not category:
-        return jsonify({
-            "error_code": "CATEGORY_NOT_FOUND",
-            "message": f"Category with ID {id} not found."
-        }), 404
+        return not_found_response("Category", id)
 
     # Block deletion if active products are linked to this category
-    active_product_count = Product.query.filter_by(
-        category_id=id, is_active=True
-    ).count()
-    if active_product_count > 0:
-        return jsonify({
-            "error_code": "CATEGORY_CONFLICT",
-            "message": (
-                f"Cannot delete category because it has {active_product_count} active product(s) linked to it. "
-                "Reassign or deactivate those products first."
-            )
-        }), 409
+    err = validate_category_deletion(id)
+    if err:
+        return err
 
     try:
         db.session.delete(category)
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({
-            "error_code": "CATEGORY_DATABASE_ERROR",
-            "message": "An error occurred while deleting the category."
-        }), 500
+        return error_response("CATEGORY_DATABASE_ERROR", "An error occurred while deleting the category.", 500)
 
     return '', 204
