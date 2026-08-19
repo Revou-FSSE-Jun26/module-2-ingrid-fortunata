@@ -2,159 +2,133 @@
 
 # RevoFashion API — Online Clothing Store Backend
 
-## Overview
+## Executive Overview
 
-**RevoFashion** is a fashion-focused e-commerce backend API inspired by **Uniqlo**, built using **Flask** and **PostgreSQL**. It exposes a RESTful JSON API that handles user registration & authentication, fashion clothing product catalog with attributes (`size`, `color`, `material`, `gender`, `sku`), category management, query filtering, and order placement with variant tracking and stock control.
+**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, and **PostgreSQL**. 
 
-The project is built progressively across bi-weekly checkpoints, covering **Checkpoint 1** (database design) and **Checkpoint 2** (Flask + SQLAlchemy layer with full API endpoints).
+It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC).
 
----
-
-## Features Implemented
-
-- ✅ PostgreSQL schema with 6 tables (`users`, `categories`, `products`, `product_images`, `orders`, `order_items`) with proper foreign key constraints
-- ✅ Fashion-specific product attributes: `size` (XS–XXL, FREE), `color`, `material`, `gender` (Men, Women, Unisex, Kids), and unique `sku`
-- ✅ Query filtering on `GET /products` by `gender`, `size`, `color`, `material`, and free-text `search` (name + description)
-- ✅ Fashion order item variant tracking (`size` and `color` stored in `order_items` at purchase time)
-- ✅ Flask application factory pattern with environment-based configuration
-- ✅ SQLAlchemy ORM models for all entities (`User`, `Category`, `Product`, `ProductImage`, `Order`, `order_items`)
-- ✅ Flask-Migrate (Alembic) for version-controlled schema migrations
-- ✅ Flask-JWT-Extended for stateless JWT authentication (tokens expire in 1 day)
-- ✅ Role-based access control (RBAC) via a custom `@roles_required` decorator
-- ✅ Password hashing with Werkzeug's `generate_password_hash`
-- ✅ Many-to-many relationship between `orders` and `products` via the `order_items` association table
-- ✅ Product image support (base64-encoded, up to 3 images per product, one primary)
-- ✅ Stock decrement on order creation with validation guard
-- ✅ Stock restoration when an order is cancelled (both via `DELETE` and `PATCH → cancelled`)
-- ✅ Order status lifecycle enforcement with role-based transition rules
-- ✅ Soft-cancel on `DELETE /orders/<id>` — order history preserved, stock restored, status set to `cancelled`
-- ✅ Shipping details (`shipping_address`, `recipient_name`, `recipient_phone`) captured on order creation
-- ✅ `GET /users/<id>` protected by JWT; customers can only view their own profile
-- ✅ Swagger / OpenAPI 3.0 interactive documentation via Flask-Smorest
-- ✅ Consistent JSON error response structure across all endpoints
+This document serves as a complete technical guide for **Backend Developers** (understanding architecture, DB design rationale, ORM models, migrations, and local setup) and **Frontend Developers** (implementing UI workflows, request payloads, response formats, headers, and enum options).
 
 ---
 
-## Technologies Used
+## Local Setup & Backend Database Loading Guide
 
-| Technology         | Version | Purpose                                 |
-| :----------------- | :------ | :-------------------------------------- |
-| Python             | 3.x     | Core language                           |
-| Flask              | 3.0.3   | Web framework                           |
-| Flask-SQLAlchemy   | 3.1.1   | ORM layer                               |
-| Flask-Migrate      | 4.0.7   | Database migration management (Alembic) |
-| Flask-Smorest      | 0.47.0  | OpenAPI 3.0 / Swagger UI generation     |
-| Flask-JWT-Extended | 4.6.0   | JWT authentication                      |
-| marshmallow        | 4.3.1   | Request/response schema validation      |
-| Werkzeug           | 3.1.8   | Password hashing utilities              |
-| psycopg2-binary    | 2.9.12  | PostgreSQL database driver              |
-| python-dotenv      | 1.0.1   | Environment variable management         |
-
----
-
-## Project Architecture & Structure
-
-```
-module-2-ingrid-fortunata/
-├── app/
-│   ├── __init__.py           # Flask app factory; registers all blueprints & extensions
-│   ├── auth.py               # roles_required() decorator for RBAC
-│   ├── config.py             # Config class; DATABASE_URL, JWT, OpenAPI settings
-│   ├── extensions.py         # SQLAlchemy, Migrate, CustomApi, JWTManager instances
-│   ├── models/
-│   │   ├── __init__.py       # Re-exports all models for migration discovery
-│   │   ├── user.py           # User model (id, username, email, password_hash, role, is_active, created_at)
-│   │   ├── category.py       # Category model
-│   │   ├── product.py        # Product model & ProductImage model
-│   │   └── order.py          # Order model + order_items association table (db.Table)
-│   ├── routes/
-│   │   ├── products.py       # GET, POST, PUT, DELETE /products
-│   │   ├── users.py          # POST /users, GET /users/<id>, POST /auth/login
-│   │   ├── categories.py     # GET, POST, PUT, DELETE /categories
-│   │   └── orders.py         # GET, POST, PATCH, DELETE /orders
-│   ├── schemas/
-│   │   ├── __init__.py       # Re-exports all marshmallow schemas
-│   │   ├── user.py           # UserRegisterInputSchema, UserGetResponseSchema, etc.
-│   │   ├── product.py        # ProductCreateInputSchema, ProductDetailResponseSchema, etc.
-│   │   ├── category.py       # CategoryCreateInputSchema, CategoryListResponseSchema, etc.
-│   │   └── order.py          # OrderCreateInputSchema, OrderResponseWrapperSchema, etc.
-│   └── seed_data.py          # Seeds sample categories, products, user, and order
-├── migrations/               # Flask-Migrate / Alembic migration history
-├── test/
-│   └── test_new_endpoints.py # Automated test suite
-├── img/                      # Checkpoint image evidence screenshots
-├── queries/                  # Raw SQL queries for verification
-├── .env                      # Local environment config (git-ignored)
-├── .env.example              # Template for environment variables
-├── requirements.txt          # Python dependencies
-└── run.py                    # Application entry point (python3 run.py)
-```
-
----
-
-## How to Run the Project Locally
+Follow these step-by-step instructions to set up the environment and seed PostgreSQL locally.
 
 ### Prerequisites
 
-- Python 3.x
-- PostgreSQL (running locally)
-- A `revoshop_db` database already created
+- **Python 3.10+**
+- **PostgreSQL 14+** running locally on port `5432`
+- Terminal tool (`psql`) or graphical client (pgAdmin / DBeaver)
 
-### Step-by-Step
+---
 
-**1. Clone the repository and create the database:**
+### Step-by-Step Setup
+
+#### Step 1: Create PostgreSQL Database
+
+Launch PostgreSQL CLI or pgAdmin and execute:
 
 ```sql
--- In psql or pgAdmin
 CREATE DATABASE revoshop_db;
 ```
 
-**2. Set up the virtual environment and install dependencies:**
+---
+
+#### Step 2: Clone Repository & Virtual Environment Setup
 
 ```bash
+# Navigate to project workspace
+cd module-2-ingrid-fortunata
+
+# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
+
+# Activate virtual environment
+source venv/bin/activate        # On Windows: venv\Scripts\activate
+
+# Upgrade pip and install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-**3. Configure environment variables:**
+---
 
-Copy `.env.example` to `.env` and fill in your local values:
+#### Step 3: Configure Local Environment Variables
 
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/revoshop_db
-SECRET_KEY=dev-secret-key-change-in-production
-JWT_SECRET_KEY=dev-jwt-secret-change-in-production
+Copy `.env.example` to `.env` and fill in your local PostgreSQL credentials:
+
+```bash
+cp .env.example .env
 ```
 
-**4. Apply database migrations:**
+Edit `.env`:
+```env
+FLASK_APP=run.py
+FLASK_ENV=development
+SECRET_KEY=dev-secret-key-change-in-production
+JWT_SECRET_KEY=dev-jwt-secret-change-in-production
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/revoshop_db
+```
+
+> 💡 **Note**: Replace `postgres:postgres@localhost:5432` with your actual local PostgreSQL user, password, host, and port.
+
+---
+
+#### Step 4: Apply Database Migrations (Flask-Migrate / Alembic)
+
+Run the migration command to construct all 6 PostgreSQL tables and indexes:
 
 ```bash
 flask db upgrade
 ```
 
-> Migration history includes:
->
-> - Initial migration: base tables (`users`, `categories`, `products`, `orders`, `order_items`)
-> - Revision `aa0fd34ebf0e`: adds the `role` column to `users` without affecting existing rows
+> **Migration History**:
+> - Initial migration creates base tables: `users`, `categories`, `products`, `product_images`, `orders`, `order_items`.
+> - Revision `aa0fd34ebf0e` applies the `role` column to `users`.
 
-**5. (Optional) Seed sample data:**
+---
+
+#### Step 5: Seed Sample Database Data
+
+Populate your database with Uniqlo-inspired fashion categories, clothing products, pre-configured role users, and sample orders:
 
 ```bash
 PYTHONPATH=. python3 app/seed_data.py
 ```
 
-Inserts sample categories, products, a user (`alice_smith`), and an order with multiple products through the `order_items` association table.
+##### Pre-Configured Seed Users for Testing
 
-**6. Start the development server:**
+| Username | Email | Password | Role | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `superadmin_user` | `superadmin@revofashion.com` | `superadmin_password` | `superadmin` | Full system access |
+| `admin_user` | `admin@revofashion.com` | `admin_password` | `admin` | Catalog & order admin |
+| `seller_user` | `seller@revofashion.com` | `seller_password` | `seller` | Merchant partner |
+| `alice_smith` | `alice@example.com` | `alice_password` | `customer` | Test customer |
+
+---
+
+#### Step 6: Start Development Server
 
 ```bash
 python3 run.py
 ```
 
-The API will be available at: **`http://127.0.0.1:5000`**
+The API server will launch at: **`http://127.0.0.1:5000`**
 
-**7. (Optional) Run the automated test suite (still on progress):**
+---
+
+#### Step 7: Access Interactive Swagger UI Documentation
+
+Open your browser to test endpoints interactively:
+
+> 🌐 **Swagger UI**: **`http://127.0.0.1:5000/swagger-ui`**  
+> 📄 **OpenAPI Spec (JSON)**: **`http://127.0.0.1:5000/openapi.json`**
+
+---
+
+#### Step 8: (Optional) Run Automated Test Suite
 
 ```bash
 PYTHONPATH=. python3 -m pytest test/
@@ -162,51 +136,275 @@ PYTHONPATH=. python3 -m pytest test/
 
 ---
 
-## Swagger / OpenAPI Documentation
+#### SQL Database Verification Queries
 
-Interactive API documentation is auto-generated by **Flask-Smorest** and is available at:
+You can verify database seeding directly via `psql`:
 
-> **`http://127.0.0.1:5000/swagger-ui`**
+```sql
+-- Check created tables
+\dt
 
-The OpenAPI 3.0 spec (JSON) is served at:
-
-> **`http://127.0.0.1:5000/openapi.json`**
-
-All request and response bodies are validated and documented via **marshmallow schemas**. Authentication-required endpoints are marked with a Bearer token security scheme in the Swagger UI.
-
----
-
-## Role List
-
-The `role` column on the `users` table controls access to protected endpoints via the `@roles_required` decorator.
-
-| Role         | Description                                                       |
-| :----------- | :---------------------------------------------------------------- |
-| `superadmin` | Full access to all endpoints including management operations      |
-| `admin`      | Can manage products, categories, and view all orders              |
-| `seller`     | Can create/update/delete products and view all orders             |
-| `customer`   | Can register, login, place orders, and view only their own orders |
-
-> **Default role**: New users registered via `POST /users` default to `customer`.
+-- Query order items junction table snapshotting
+SELECT 
+    o.id AS order_id, 
+    u.username, 
+    p.name AS product_name, 
+    oi.size, 
+    oi.color, 
+    oi.quantity, 
+    oi.price_at_purchase
+FROM orders o
+JOIN users u ON o.user_id = u.id
+JOIN order_items oi ON o.id = oi.order_id
+JOIN products p ON oi.product_id = p.id;
+```
 
 ---
 
-## Order Status
+## Core Features
+
+- ✅ **PostgreSQL Schema (6 Tables)**: Normalized relational structure (`users`, `categories`, `products`, `product_images`, `orders`, `order_items`).
+- ✅ **Fashion-Specific Attributes**: Dedicated support for clothing sizes (`XS`–`XXL`, `FREE`), colors, materials, target genders (`Men`, `Women`, `Unisex`, `Kids`), and unique SKUs.
+- ✅ **Decoupled Product Gallery**: Product image gallery table supporting up to 3 base64-encoded images per product with primary image thumbnail selection.
+- ✅ **Flexible Catalog Filtering & Search**: Filter `GET /products` by `gender`, `size`, `color`, `material`, free-text `search` (name & description), and pagination (`page`, `per_page`).
+- ✅ **Historical Variant & Price Snapshotting**: `order_items` junction table snapshotting item price, size, and color at the exact moment of purchase so historical orders are immune to future catalog price changes or product updates.
+- ✅ **Stateless JWT Authentication**: Secure authentication via `Flask-JWT-Extended` with 24-hour token expiration.
+- ✅ **Role-Based Access Control (RBAC)**: Custom `@roles_required` decorator enforcing permission levels across 4 user roles (`superadmin`, `admin`, `seller`, `customer`).
+- ✅ **Order Lifecycle & State Machine**: Status transitions (`pending` → `paid` → `processing` → `shipped` → `delivered` or `cancelled`) with role enforcement.
+- ✅ **Automated Stock Control**: Stock is decremented on order placement and restored upon order cancellation.
+- ✅ **Soft-Cancel Order Deletion**: `DELETE /orders/<id>` performs a soft cancel (restores stock, sets status to `cancelled`, preserves audit row).
+- ✅ **OpenAPI 3.0 / Swagger UI**: Auto-generated interactive API docs via `Flask-Smorest` and `marshmallow`.
+
+---
+
+## Technology Stack & Architecture
+
+| Layer / Technology | Version | Purpose |
+| :--- | :--- | :--- |
+| **Python** | 3.x | Primary programming language |
+| **Flask** | 3.0.3 | Web framework & App Factory pattern |
+| **Flask-SQLAlchemy** | 3.1.1 | Object-Relational Mapping (ORM) layer |
+| **Flask-Migrate** | 4.0.7 | Database migration management (Alembic) |
+| **Flask-Smorest** | 0.47.0 | OpenAPI 3.0 specification & Swagger UI generation |
+| **Flask-JWT-Extended** | 4.6.0 | Stateless JSON Web Token authentication |
+| **marshmallow** | 4.3.1 | Input validation & serialization schemas |
+| **Werkzeug** | 3.1.8 | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
+| **psycopg2-binary** | 2.9.12 | PostgreSQL database driver |
+| **python-dotenv** | 1.0.1 | Local environment configuration management |
+
+### Project Directory Structure
+
+```
+module-2-ingrid-fortunata/
+├── app/
+│   ├── __init__.py           # Flask app factory; registers blueprints & extensions
+│   ├── auth.py               # @roles_required() decorator for RBAC
+│   ├── config.py             # Config class (DATABASE_URL, JWT, OpenAPI settings)
+│   ├── extensions.py         # Extension instances (db, migrate, api, jwt)
+│   ├── models/               # SQLAlchemy ORM Models
+│   │   ├── __init__.py       # Model exports for migration discovery
+│   │   ├── user.py           # User model
+│   │   ├── category.py       # Category model
+│   │   ├── product.py        # Product & ProductImage models
+│   │   └── order.py          # Order model & order_items association table
+│   ├── routes/               # Flask-Smorest API Blueprints
+│   │   ├── users.py          # /auth/login, /users
+│   │   ├── categories.py     # /categories
+│   │   ├── products.py       # /products
+│   │   └── orders.py         # /orders
+│   ├── schemas/              # Marshmallow Validation & Serialization Schemas
+│   │   ├── user.py           # User & Auth schemas
+│   │   ├── category.py       # Category schemas
+│   │   ├── product.py        # Product schemas
+│   │   └── order.py          # Order & OrderItem schemas
+│   └── seed_data.py          # Database seeding script (categories, products, users, orders)
+├── migrations/               # Alembic database migration history
+├── test/
+│   └── test_new_endpoints.py # Automated test suite (pytest)
+├── img/                      # ERD Diagram & media assets
+├── queries/                  # SQL scripts for verification
+├── .env.example              # Template for local environment variables
+├── requirements.txt          # Python dependency specifications
+└── run.py                    # Application entry point (`python3 run.py`)
+```
+
+---
+
+## Database Schema Overview & Design Rationale (Why)
+
+The database consists of **6 normalized tables** designed for scalable fashion e-commerce operations.
+
+### Entity-Relationship Diagram (ERD)
+
+![Database Schema Diagram](./img/diagram2.png)
+
+---
+
+### Detailed Table Specifications & Architectural Rationale
+
+#### 1. `users` — User Account & RBAC Credentials
+
+Stores registered user accounts, login credentials, and permission roles.
+
+| Column | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique user ID |
+| `username` | `VARCHAR(50)` | `UNIQUE`, `NOT NULL` | Unique account username |
+| `email` | `VARCHAR(120)` | `UNIQUE`, `NOT NULL` | Unique email address |
+| `password_hash` | `VARCHAR(255)` | `NOT NULL` | PBKDF2/scrypt hashed password |
+| `role` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'customer'` | User role enum (`superadmin`, `admin`, `seller`, `customer`) |
+| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Account status toggle |
+| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Account creation timestamp |
+
+- **Design Rationale (Why)**:
+  - **Password Security**: Passwords are never stored in plain text. Hashing via Werkzeug ensures resistance to dictionary and rainbow table attacks.
+  - **RBAC in User Record**: Storing `role` directly on the `users` table avoids join overhead when creating JWT claims and evaluating the `@roles_required` decorator on protected routes.
+  - **Soft Disabling**: `is_active` allows disabling compromised or deactivated accounts without deleting historical orders linked to the user.
+
+---
+
+#### 2. `categories` — Product Categories
+
+Organizes clothing items into logical catalog sections (e.g., *T-Shirts*, *Outerwear*).
+
+| Column | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique category ID |
+| `name` | `VARCHAR(100)` | `UNIQUE`, `NOT NULL` | Category name |
+| `description` | `TEXT` | `NULLABLE` | Optional category overview |
+| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Hides category from public list |
+| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Creation timestamp |
+
+- **Design Rationale (Why)**:
+  - **Catalog Normalization**: Separated from `products` to prevent text duplication and enable category-level filtering.
+  - **Soft Catalog Hiding**: `is_active` lets admins temporarily hide an entire seasonal category from `GET /products` without deleting items.
+  - **FK Protection (`ON DELETE SET NULL`)**: If a category is deleted, linked products have their `category_id` set to `NULL` (uncategorized) rather than deleting products.
+
+---
+
+#### 3. `products` — Apparel Catalog & Inventory
+
+Stores clothing items with fashion-specific attributes and stock balances.
+
+| Column | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique product ID |
+| `category_id` | `INTEGER` | `FK → categories.id (SET NULL)` | Linked category |
+| `name` | `VARCHAR(150)` | `NOT NULL` | Clothing product title |
+| `description` | `TEXT` | `NULLABLE` | Detailed description |
+| `price` | `NUMERIC(10, 2)` | `NOT NULL` | Unit price |
+| `stock` | `INTEGER` | `NOT NULL`, `DEFAULT 0` | Available stock count |
+| `size` | `VARCHAR(20)` | `NULLABLE` | Fashion size (`XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE`) |
+| `color` | `VARCHAR(50)` | `NULLABLE` | Color variation |
+| `material` | `VARCHAR(150)` | `NULLABLE` | Fabric composition |
+| `gender` | `VARCHAR(20)` | `NULLABLE` | Target demographic (`Men`, `Women`, `Unisex`, `Kids`) |
+| `sku` | `VARCHAR(50)` | `UNIQUE`, `NULLABLE` | Stock Keeping Unit code |
+| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Soft delete flag |
+| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Creation timestamp |
+| `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Modification timestamp |
+
+- **Design Rationale (Why)**:
+  - **Financial Precision (`NUMERIC(10,2)`)**: Uses fixed-point decimals instead of `FLOAT` to eliminate binary floating-point rounding errors during price calculations.
+  - **Fashion Attributes**: Built-in attributes (`size`, `color`, `material`, `gender`) reflect fashion retail standards (Uniqlo model).
+  - **Unique SKU**: Enforces inventory uniqueness for warehouse stock tracking.
+  - **Stock Guard**: `stock` is guarded at database and validation levels to prevent negative inventory during high-concurrency order placement.
+
+---
+
+#### 4. `product_images` — Product Image Gallery
+
+Stores image records attached to products.
+
+| Column | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique image ID |
+| `product_id` | `INTEGER` | `FK → products.id (CASCADE)`, `NOT NULL` | Parent product |
+| `image_base64` | `TEXT` | `NOT NULL` | Base64-encoded image string (~1MB max) |
+| `is_primary` | `BOOLEAN` | `NOT NULL`, `DEFAULT false` | Thumbnail selection flag |
+| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Upload timestamp |
+
+- **Design Rationale (Why)**:
+  - **Decoupled Gallery Table**: Normalizing images into a separate 1-to-many table allows products to store up to 3 images without cluttering the main `products` table.
+  - **Cascade Cleanup (`CASCADE`)**: Deleting a product automatically cleans up its associated image records.
+  - **Primary Image Flag (`is_primary`)**: Allows `GET /products` list view to instantly fetch thumbnail images via an optimized subquery without returning full image arrays.
+
+---
+
+#### 5. `orders` — Order Header & Lifecycle Management
+
+Stores overall order metadata, buyer reference, status state, and delivery details.
+
+| Column | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique order ID |
+| `user_id` | `INTEGER` | `FK → users.id (RESTRICT)`, `NOT NULL` | Customer who placed order |
+| `total_amount` | `NUMERIC(10, 2)` | `NOT NULL`, `DEFAULT 0.00` | Order total monetary value |
+| `status` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'pending'` | Lifecycle status (`pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`) |
+| `shipping_address` | `TEXT` | `NULLABLE` | Delivery address snapshot |
+| `recipient_name` | `VARCHAR(150)` | `NULLABLE` | Recipient full name snapshot |
+| `recipient_phone` | `VARCHAR(30)` | `NULLABLE` | Contact phone number snapshot |
+| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Order timestamp |
+| `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Last status update timestamp |
+
+- **Design Rationale (Why)**:
+  - **FK Restrict (`ON DELETE RESTRICT`)**: Prevents deleting a user account if that user has existing order records, guaranteeing audit integrity.
+  - **Shipping Snapshot**: Stores `shipping_address`, `recipient_name`, and `recipient_phone` on the order header so subsequent profile address changes do not corrupt past delivery logs.
+  - **Lifecycle Control**: `status` column acts as a formal state machine driving stock allocation and cancellation logic.
+
+---
+
+#### 6. `order_items` — Junction Table (Many-to-Many Association Table)
+
+Associates `orders` and `products` while capturing transaction snapshots.
+
+| Column | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `order_id` | `INTEGER` | `PK`, `FK → orders.id (RESTRICT)` | Linked order |
+| `product_id` | `INTEGER` | `PK`, `FK → products.id (RESTRICT)` | Linked product |
+| `quantity` | `INTEGER` | `NOT NULL`, `DEFAULT 1` | Purchased quantity |
+| `price_at_purchase` | `NUMERIC(10, 2)` | `NOT NULL` | Snapshot unit price at purchase time |
+| `size` | `VARCHAR(20)` | `NULLABLE` | Purchased size variant |
+| `color` | `VARCHAR(50)` | `NULLABLE` | Purchased color variant |
+
+- **Design Rationale (Why - CRITICAL)**:
+  - **Price & Variant Snapshotting**: Stores `price_at_purchase`, `size`, and `color` directly in the junction table. **Why?** Product prices or available attributes in the catalog change over time. Snapshotting ensures past financial totals and customer order history remain 100% accurate and immutable regardless of catalog updates.
+  - **FK Restrict (`RESTRICT`)**: Prevents hard-deleting catalog products that are referenced in order items, preserving historical purchase records.
+
+---
+
+## Role-Based Access Control (RBAC) & Role Options
+
+User authorization is enforced via JWT claims and the custom `@roles_required` decorator located in `app/auth.py`.
+
+### Available Role Options (`role`)
+
+| Role | Access Scope & Description | Default? |
+| :--- | :--- | :--- |
+| `customer` | Standard retail customer. Can register, log in, place orders, view active products/categories, and view **only their own** profile and orders. | **Yes** (Default on `POST /users`) |
+| `seller` | Merchant partner. Can create, update, and soft-delete products/categories. Can view all orders in system and manage order fulfillment statuses. | No |
+| `admin` | System administrator. Full operational access over catalog, categories, user profiles, and order lifecycles. | No |
+| `superadmin` | System owner. Unrestricted permissions across all system resources and endpoints. | No |
+
+---
+
+## Order Lifecycle & Status Options State Machine
 
 The `status` column on the `orders` table tracks the lifecycle of an order.
 
-| Status        | Description                                                             |
-| :------------ | :---------------------------------------------------------------------- |
-| `pending`     | Order placed, awaiting payment (default on creation)                    |
-| `paid`        | Customer has completed payment                                          |
-| `processing`  | Seller/admin is preparing the order                                     |
-| `shipped`     | Order has been dispatched                                               |
-| `delivered`   | Order successfully received by the customer                             |
-| `cancelled`   | Order was cancelled (only from `pending` or `paid`)                     |
+### Available Status Options (`status`)
 
-### Status Transition Rules
+| Status | Description |
+| :--- | :--- |
+| `pending` | Order placed, stock reserved, awaiting payment (Default on order creation) |
+| `paid` | Customer completed payment |
+| `processing` | Seller/admin is preparing items for dispatch |
+| `shipped` | Order handed to logistics carrier |
+| `delivered` | Order successfully delivered to recipient |
+| `cancelled` | Order cancelled; stock automatically restored to inventory |
 
-Status can only move **forward** according to this flow:
+### Status Transition Flow & Permissions Matrix
+
+Orders can only transition **forward** through the lifecycle or be **cancelled** from eligible early states (`pending` or `paid`).
 
 ```
 pending ──→ paid ──→ processing ──→ shipped ──→ delivered
@@ -214,77 +412,61 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
    └───────────┴──────────────────────────────→ cancelled
 ```
 
-| From \ To     | `paid` | `processing` | `shipped` | `delivered` | `cancelled` |
-| :------------ | :----: | :----------: | :-------: | :---------: | :---------: |
-| `pending`     | ✅      | ❌            | ❌         | ❌           | ✅           |
-| `paid`        | ❌      | ✅ *          | ❌         | ❌           | ✅           |
-| `processing`  | ❌      | ❌            | ✅ *       | ❌           | ❌           |
-| `shipped`     | ❌      | ❌            | ❌         | ✅ *         | ❌           |
-| `delivered`   | —      | —            | —         | —           | —           |
-| `cancelled`   | —      | —            | —         | —           | —           |
+| From Status \ To Status | `paid` | `processing` | `shipped` | `delivered` | `cancelled` |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **`pending`** | ✅ *(Customer/Admin)* | ❌ | ❌ | ❌ | ✅ *(Customer/Admin)* |
+| **`paid`** | ❌ | ✅ *(Seller/Admin)* | ❌ | ❌ | ✅ *(Customer/Admin)* |
+| **`processing`** | ❌ | ❌ | ✅ *(Seller/Admin)* | ❌ | ❌ |
+| **`shipped`** | ❌ | ❌ | ❌ | ✅ *(Seller/Admin)* | ❌ |
+| **`delivered`** | — | — | — | — | — *(Terminal state)* |
+| **`cancelled`** | — | — | — | — | — *(Terminal state)* |
 
-> \* Admin / Seller / Superadmin only. Customers can only trigger: `pending → paid`, `pending → cancelled`, `paid → cancelled`.
+#### Stock Side-Effects & Soft-Cancel Rules
 
-> **Cancellation & stock**: When an order is cancelled (via `DELETE` or `PATCH` with `status: cancelled`), all product stock quantities are automatically restored.
-
-> **Order history preserved**: `DELETE /orders/<id>` is a soft-cancel — it sets `status = 'cancelled'` and restores stock but **keeps the order row in the database**. Financial and audit history is never lost.
-
-> **Refund policy**: Cancellations from `pending` or `paid` trigger stock restoration (representing a refund). Orders that have reached `delivered` cannot be cancelled or refunded.
-
----
-
-## API Endpoints
-
-### Authentication
-
-| Method | Endpoint      | Auth | Description                                             |
-| :----- | :------------ | :--- | :------------------------------------------------------ |
-| `POST` | `/auth/login` | None | Login with username/email + password; returns JWT token |
-
-### Users
-
-| Method | Endpoint      | Auth | Description                                       |
-| :----- | :------------ | :--- | :------------------------------------------------ |
-| `POST` | `/users`      | None | Register a new user; defaults role to `customer`  |
-| `GET`  | `/users/<id>` | JWT  | Retrieve own profile (customers) or any user (admin/seller/superadmin) |
-
-### Products
-
-| Method   | Endpoint         | Auth Required                   | Description                                    |
-| :------- | :--------------- | :------------------------------ | :--------------------------------------------- |
-| `GET`    | `/products`      | None                            | List active products (supports `?gender=`, `?size=`, `?color=`, `?material=`, `?search=`, `?page=`, `?per_page=`) |
-| `GET`    | `/products/<id>` | None                            | Get a single active product with all images and fashion attributes |
-| `POST`   | `/products`      | `superadmin`, `admin`, `seller` | Create a new clothing product with fashion attributes (`size`, `color`, `material`, `gender`, `sku`) and images |
-| `PUT`    | `/products/<id>` | `superadmin`, `admin`, `seller` | Update a product and replace its images/fashion attributes |
-| `DELETE` | `/products/<id>` | `superadmin`, `admin`, `seller` | Delete a product (blocked if linked to orders) |
-
-### Categories
-
-| Method   | Endpoint           | Auth Required                   | Description                                 |
-| :------- | :----------------- | :------------------------------ | :------------------------------------------ |
-| `GET`    | `/categories`      | None                            | List all categories                         |
-| `GET`    | `/categories/<id>` | None                            | Get a category by ID including its products |
-| `POST`   | `/categories`      | `superadmin`, `admin`, `seller` | Create a new category                       |
-| `PUT`    | `/categories/<id>` | `superadmin`, `admin`, `seller` | Update a category                           |
-| `DELETE` | `/categories/<id>` | `superadmin`, `admin`, `seller` | Delete a category                           |
-
-### Orders
-
-| Method   | Endpoint        | Auth Required     | Description                                                                 |
-| :------- | :-------------- | :---------------- | :-------------------------------------------------------------------------- |
-| `GET`    | `/orders`       | All authenticated | Admins/sellers see all orders; customers see only their own                 |
-| `GET`    | `/orders/<id>`  | All authenticated | View order detail with items; customers restricted to their own orders      |
-| `POST`   | `/orders`       | All authenticated | Place a new order; requires `items`, `shipping_address`, `recipient_name`, `recipient_phone`; validates stock and decrements on success |
-| `PATCH`  | `/orders/<id>`  | All authenticated | Update order status following the lifecycle rules; restores stock if transitioning to `cancelled` |
-| `DELETE` | `/orders/<id>`  | All authenticated | Soft-cancel an order (only `pending`/`paid`); restores stock, preserves row, returns `200` with cancelled order |
+1. **Order Creation (`POST /orders`)**: Decrements `product.stock` by item `quantity` inside an atomic transaction. If stock is insufficient, request returns `400 Bad Request`.
+2. **Order Cancellation (`PATCH /orders/<id>` with `status: cancelled` OR `DELETE /orders/<id>`)**: Automatically restores stock (`product.stock += item.quantity`) for all items in the order.
+3. **Soft-Cancel Policy (`DELETE /orders/<id>`)**: Performing a `DELETE` request does **NOT** hard-delete the database row. It sets `status = 'cancelled'`, restores product stock, preserves historical financial audit records, and returns the cancelled order object.
+4. **Delivered Protection**: Orders in `delivered` status cannot be cancelled or refunded.
 
 ---
 
-### 📝 PUT Endpoint Convention: Full Object Replacement
+## API Reference Guide
 
-Following standard REST architectural constraints, the **`PUT`** HTTP method represents a **full replacement** of the target resource. When issuing a `PUT` request, the client should send the complete state of the object in the request body.
+### General API Conventions
 
-#### Example 1: `PUT /products/<id>` (Full Body Payload)
+- **Base URL**: `http://127.0.0.1:5000`
+- **Request/Response Format**: `application/json`
+- **Authentication Header**:
+  ```http
+  Authorization: Bearer <your_jwt_token>
+  ```
+- **Standard Error Response Structure**:
+  ```json
+  {
+    "error_code": "PRODUCT_NOT_FOUND",
+    "message": "Product with ID 999 not found."
+  }
+  ```
+- **Standard Validation Error Structure (422 Unprocessable Entity)**:
+  ```json
+  {
+    "code": 422,
+    "status": "Unprocessable Entity",
+    "errors": {
+      "json": {
+        "price": ["Price must be greater than zero."]
+      }
+    }
+  }
+  ```
+
+---
+
+### 📝 RESTful `PUT` Convention: Full Object Replacement
+
+Following standard REST architectural principles, the **`PUT`** HTTP method represents a **full object replacement** of the target resource. When issuing a `PUT` request, clients must supply the complete entity state.
+
+#### Example: `PUT /products/<id>` (Full Body Payload)
 ```json
 {
   "category_id": 1,
@@ -300,90 +482,281 @@ Following standard REST architectural constraints, the **`PUT`** HTTP method rep
   "is_active": true,
   "images": [
     {
-      "image_base64": "data:image/jpeg;base64,...",
+      "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
       "is_primary": true
     }
   ]
 }
 ```
 
-#### Example 2: `PUT /categories/<id>` (Full Body Payload)
-```json
-{
-  "name": "T-Shirts & Tops",
-  "description": "Everyday casual tees, graphic shirts, and tank tops.",
-  "is_active": true
-}
-```
+---
+
+### Endpoint Reference Summary
+
+#### 1. Authentication & User Management
+
+##### `POST /auth/login`
+- **Auth**: None
+- **Description**: Authenticate user credentials and receive a JWT Bearer token.
+- **Request Body Payload**:
+  | Field | Type | Required | Validation / Options |
+  | :--- | :--- | :---: | :--- |
+  | `username` | String | Optional* | Account username (*Must provide either `username` or `email`) |
+  | `email` | String | Optional* | Account email address |
+  | `password` | String | **Required** | Plain-text account password |
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "data": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "user": {
+        "id": 1,
+        "username": "alice_smith",
+        "email": "alice@example.com",
+        "role": "customer",
+        "is_active": true,
+        "created_at": "2026-08-19T10:00:00+00:00"
+      }
+    }
+  }
+  ```
 
 ---
 
-## Checkpoint 1: Database Design (Updated)
-
-This checkpoint focuses on the initial PostgreSQL schema and seed data.
-
-### Database Schema Overview
-
-The database consists of 6 tables:
-
-- `users` — Stores user account records
-- `categories` — Product categories
-- `products` — Store items, linked to a category
-- `product_images` — Stores images for products
-- `orders` — Orders placed by a user
-- `order_items` — Junction table linking `orders` and `products` (many-to-many)
-
-#### Database Schema Diagram
-
-![Database Schema Diagram](./img/diagram2.png)
+##### `POST /users`
+- **Auth**: None
+- **Description**: Register a new user account.
+- **Request Body Payload**:
+  | Field | Type | Required | Options / Enums |
+  | :--- | :--- | :---: | :--- |
+  | `username` | String | **Required** | Unique username |
+  | `email` | String | **Required** | Unique email address |
+  | `password` | String | **Required** | Account password |
+  | `role` | String | Optional | Options: `superadmin`, `admin`, `seller`, `customer` (Default: `customer`) |
+- **Success Response (`201 Created`)**: Returns created user profile.
 
 ---
 
-## Checkpoint 2: Flask & SQLAlchemy Layer
-
-This checkpoint stands up the full Flask application layer with SQLAlchemy ORM, Flask-Migrate schema history, JWT auth, RBAC, and all REST API endpoints.
-
-### Image Evidence
-
-#### 1. GET /products — List all active products
-
-![GET /products](./img/get_all_products.png)
-
-#### 2. GET /products/\<id\> — Retrieve a product by ID
-
-![GET /products/<id>](./img/get_product_by_id.png)
-
-#### 3. POST /users — Register route (create a new user)
-
-![POST /users](./img/register_user.png)
-
-#### 4. GET /users/\<id\> — Retrieve route (user found & not found)
-
-![GET /users/<id> — Found](./img/get_user_by_id.png)
-
-![GET /users/<id> — Not Found](./img/get_user_by_id_not_found.png)
-
-#### 5. Role column added to users without affecting existing rows
-
-![role column in users table](./img/db_user_role_column.png)
-
-#### 6. order_items association table exists
-
-![order_items table](./img/db_order_items.png)
+##### `GET /users/<id>`
+- **Auth**: JWT Required (`Authorization: Bearer <token>`)
+- **Permissions**: Customers can access **only their own** profile (`user_id == id`). Admins, sellers, and superadmins can view any profile.
+- **Success Response (`200 OK`)**: Returns user profile details.
 
 ---
 
-### Database Association & Verification
+#### 2. Products Catalog
 
-- **Association Table**: Defined in [`app/models/order.py`](./app/models/order.py) via `db.Table('order_items', ...)` with foreign keys `order_id` → `orders.id` and `product_id` → `products.id`, plus `quantity` and `price_at_purchase` columns.
-- **Many-to-Many Query Verification**:
-  ```sql
-  SELECT * FROM order_items;
+##### `GET /products`
+- **Auth**: None
+- **Description**: Retrieve active clothing products with pagination and fashion attribute filters.
+- **Query Parameters**:
+  | Parameter | Type | Options / Enums | Description |
+  | :--- | :--- | :--- | :--- |
+  | `gender` | String | `Men`, `Women`, `Unisex`, `Kids` | Filter by target demographic |
+  | `size` | String | `XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE` | Filter by clothing size |
+  | `color` | String | Case-insensitive substring | Filter by color (e.g., `Navy`, `White`) |
+  | `material` | String | Case-insensitive substring | Filter by fabric (e.g., `Cotton`) |
+  | `search` | String | Free-text string | Search across product `name` and `description` |
+  | `page` | Integer | Min `1` | Page number for pagination |
+  | `per_page` | Integer | Min `1` (Default: `10`) | Items per page |
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "data": [
+      {
+        "id": 1,
+        "category_id": 1,
+        "name": "AIRism Cotton Crew Neck T-Shirt",
+        "description": "Smooth AIRism cotton blend...",
+        "price": 14.9,
+        "stock": 200,
+        "size": "M",
+        "color": "White",
+        "material": "58% Cotton, 38% Polyester, 4% Spandex",
+        "gender": "Men",
+        "sku": "RF-TS-001",
+        "primary_image": "data:image/jpeg;base64,...",
+        "is_active": true,
+        "created_at": "2026-08-19T10:00:00+00:00",
+        "updated_at": "2026-08-19T10:00:00+00:00"
+      }
+    ],
+    "page": 1,
+    "per_page": 10,
+    "total": 15,
+    "pages": 2
+  }
   ```
-  _Output_:
+
+---
+
+##### `GET /products/<id>`
+- **Auth**: None
+- **Description**: Retrieve a single active product with its complete image gallery.
+- **Success Response (`200 OK`)**: Includes `images` array containing base64 images and `is_primary` flags.
+
+---
+
+##### `POST /products`
+- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Description**: Create a new clothing product.
+- **Request Body Payload**:
+  | Field | Type | Required | Options / Enums / Validation |
+  | :--- | :--- | :---: | :--- |
+  | `name` | String | **Required** | Product title |
+  | `price` | Float | **Required** | Must be `> 0` |
+  | `stock` | Integer | **Required** | Must be `>= 0` |
+  | `category_id` | Integer | Optional | Valid category ID |
+  | `size` | String | Optional | Options: `XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE` |
+  | `color` | String | Optional | Color name |
+  | `material` | String | Optional | Fabric composition |
+  | `gender` | String | Optional | Options: `Men`, `Women`, `Unisex`, `Kids` |
+  | `sku` | String | Optional | Unique SKU code |
+  | `images` | Array | Optional | Max 3 images. Object fields: `image_base64` (Max 1MB), `is_primary` (Boolean, max 1 primary) |
+
+---
+
+##### `PUT /products/<id>`
+- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Description**: Full replacement update of a product entity and its image gallery.
+
+---
+
+##### `DELETE /products/<id>`
+- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Description**: Delete a product. Blocked with `400 Bad Request` if product is referenced in historical orders.
+
+---
+
+#### 3. Categories Management
+
+##### `GET /categories`
+- **Auth**: None
+- **Description**: Retrieve all active categories.
+
+##### `GET /categories/<id>`
+- **Auth**: None
+- **Description**: Retrieve a category by ID along with its associated active products.
+
+##### `POST /categories`
+- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+- **Request Payload**: `{"name": "Outerwear", "description": "Jackets & Coats", "is_active": true}`
+
+##### `PUT /categories/<id>`
+- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+
+##### `DELETE /categories/<id>`
+- **Auth**: JWT Required (`superadmin`, `admin`, `seller`)
+
+---
+
+#### 4. Orders Lifecycle
+
+##### `GET /orders`
+- **Auth**: JWT Required
+- **Permissions**: Customers receive **only their own** orders. Admins/sellers/superadmins view all system orders.
+
+---
+
+##### `GET /orders/<id>`
+- **Auth**: JWT Required
+- **Permissions**: Customers restricted to viewing their own orders. Returns full order detail including items snapshot array (`items`: `product_id`, `name`, `quantity`, `price_at_purchase`, `size`, `color`).
+
+---
+
+##### `POST /orders`
+- **Auth**: JWT Required (All authenticated users)
+- **Description**: Place a new order. Validates stock, decrements inventory, and records size/color variants and price snapshot.
+- **Request Body Payload**:
+  ```json
+  {
+    "shipping_address": "Jl. Jendral Sudirman No. 45, Jakarta",
+    "recipient_name": "Alice Smith",
+    "recipient_phone": "+6281234567890",
+    "items": [
+      {
+        "product_id": 1,
+        "quantity": 2,
+        "size": "M",
+        "color": "White"
+      }
+    ]
+  }
   ```
-   order_id | product_id | quantity | price_at_purchase
-  ----------+------------+----------+-------------------
-          1 |          1 |        1 |            199.99
-          1 |          2 |        1 |            129.50
+- **Success Response (`201 Created`)**: Returns created order object.
+
+---
+
+##### `PATCH /orders/<id>`
+- **Auth**: JWT Required
+- **Description**: Update order lifecycle status following state machine rules. Restores stock if status transitions to `cancelled`.
+- **Request Body Payload**:
+  | Field | Type | Required | Options / Enums |
+  | :--- | :--- | :---: | :--- |
+  | `status` | String | **Required** | Options: `pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled` |
+
+---
+
+##### `DELETE /orders/<id>`
+- **Auth**: JWT Required
+- **Description**: Soft-cancel an order. Sets `status = 'cancelled'`, restores product stock balances to inventory, preserves order record for audit history, and returns `200 OK`.
+
+
+
+---
+
+## Frontend Integration Guidelines
+
+### 1. Authentication Flow & Headers
+1. Authenticate user via `POST /auth/login`.
+2. Extract `token` from `response.data.data.token`.
+3. Store token securely (e.g., HTTP-only cookie or memory).
+4. Attach token to all protected API requests:
+   ```javascript
+   headers: {
+     'Authorization': `Bearer ${token}`,
+     'Content-Type': 'application/json'
+   }
+   ```
+
+### 2. Rendering UI Select Controls (Enums)
+- **Clothing Sizes**: Populate dropdowns with `["XS", "S", "M", "L", "XL", "XXL", "FREE"]`.
+- **Gender Filter**: Populate tab filters with `["Men", "Women", "Unisex", "Kids"]`.
+- **Order Status Badges**: Map status strings to UI badge colors:
+  - `pending` ➔ Yellow / Orange
+  - `paid` ➔ Light Blue
+  - `processing` ➔ Blue
+  - `shipped` ➔ Purple
+  - `delivered` ➔ Green
+  - `cancelled` ➔ Red / Gray
+
+### 3. Product Base64 Image Handling
+- Primary images on catalog list (`GET /products`) are returned in `primary_image`.
+- Render base64 images directly in `<img>` tags:
+  ```html
+  <img src="data:image/jpeg;base64,..." alt="Product Image" />
   ```
+
+---
+
+## Backend Extension & Maintenance Guidelines
+
+### Adding a New API Endpoint
+
+1. **Define Schema**: Add input/output marshmallow schemas in `app/schemas/`.
+2. **Create Controller**: Add route handler in `app/routes/` using Flask-Smorest blueprints:
+   ```python
+   @bp.route('/your-endpoint', methods=['POST'])
+   @jwt_required()
+   @roles_required('admin', 'superadmin')
+   @bp.arguments(YourInputSchema)
+   @bp.response(201, YourOutputSchema)
+   def handle_endpoint(data):
+       # Business logic here
+       pass
+   ```
+3. **Database Migrations**: When modifying ORM models in `app/models/`:
+   ```bash
+   flask db migrate -m "Describe model changes"
+   flask db upgrade
+   ```
