@@ -23,6 +23,8 @@ class Order(db.Model):
     shipping_address = db.Column(db.Text, nullable=False)
     recipient_name = db.Column(db.String(150), nullable=False)
     recipient_phone = db.Column(db.String(30), nullable=False)
+    tracking_number = db.Column(db.String(100), nullable=True)
+    cancellation_reason = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -39,6 +41,8 @@ class Order(db.Model):
             'shipping_address': self.shipping_address,
             'recipient_name': self.recipient_name,
             'recipient_phone': self.recipient_phone,
+            'tracking_number': self.tracking_number,
+            'cancellation_reason': self.cancellation_reason,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

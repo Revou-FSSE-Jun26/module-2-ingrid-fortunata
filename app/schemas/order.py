@@ -81,6 +81,8 @@ class OrderResponseSchema(Schema):
     shipping_address = fields.Str(dump_only=True)
     recipient_name = fields.Str(dump_only=True)
     recipient_phone = fields.Str(dump_only=True)
+    tracking_number = fields.Str(dump_only=True, allow_none=True)
+    cancellation_reason = fields.Str(dump_only=True, allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 
@@ -114,4 +116,38 @@ class OrderUpdateStatusSchema(Schema):
             list(VALID_STATUSES),
             error="Invalid status. Must be one of: pending, paid, processing, shipped, delivered, cancelled."
         )
+    )
+    tracking_number = fields.Str(
+        allow_none=True,
+        validate=validate.Length(max=100)
+    )
+    cancellation_reason = fields.Str(
+        allow_none=True,
+        validate=validate.Length(max=1000)
+    )
+
+    @validates_schema
+    def validate_conditional_fields(self, data, **kwargs):
+        status = data.get("status")
+
+        if status == "shipped":
+            tracking = data.get("tracking_number")
+            if not tracking or not tracking.strip():
+                raise ValidationError(
+                    {"tracking_number": ["tracking_number is required when updating status to 'shipped'."]}
+                )
+
+        if status == "cancelled":
+            reason = data.get("cancellation_reason")
+            if not reason or not reason.strip():
+                raise ValidationError(
+                    {"cancellation_reason": ["cancellation_reason is required when cancelling an order."]}
+                )
+
+
+class OrderCancelInputSchema(Schema):
+    cancellation_reason = fields.Str(
+        required=True,
+        validate=[validate.Length(min=1, max=1000), not_blank],
+        error_messages={"required": "cancellation_reason is required when cancelling an order."}
     )

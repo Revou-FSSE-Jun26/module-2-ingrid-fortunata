@@ -372,12 +372,15 @@ Stores overall order metadata, buyer reference, status state, and delivery detai
 | `shipping_address` | `TEXT` | `NOT NULL` | Delivery address snapshot |
 | `recipient_name` | `VARCHAR(150)` | `NOT NULL` | Recipient full name snapshot |
 | `recipient_phone` | `VARCHAR(30)` | `NOT NULL` | Contact phone number snapshot |
+| `tracking_number` | `VARCHAR(100)` | `NULLABLE` | Carrier tracking number (required when moving to `shipped`) |
+| `cancellation_reason` | `TEXT` | `NULLABLE` | Reason recorded when order is cancelled |
 | `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Order timestamp |
 | `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Last status update timestamp |
 
 - **Design Rationale (Why)**:
   - **FK Restrict (`ON DELETE RESTRICT`)**: Prevents deleting a user account if that user has existing order records, guaranteeing audit integrity.
   - **Shipping Snapshot**: Stores `shipping_address`, `recipient_name`, and `recipient_phone` on the order header so subsequent profile address changes do not corrupt past delivery logs.
+  - **Logistics & Cancellation Metadata**: `tracking_number` enables buyer package tracking once shipped, while `cancellation_reason` provides audit justification for cancelled orders and inventory restocking.
   - **Lifecycle Control**: `status` column acts as a formal state machine driving stock allocation and cancellation logic.
 
 ---
@@ -791,15 +794,17 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 - **Auth**: JWT Required
 - **Description**: Update order lifecycle status following state machine rules. Restores stock if status transitions to `cancelled`.
 - **Request Body Payload**:
-  | Field | Type | Required | Options / Enums |
+  | Field | Type | Required | Description / Enums |
   | :--- | :--- | :---: | :--- |
   | `status` | String | **Required** | Options: `pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled` |
+  | `tracking_number` | String | Conditional | **Required** when status is updated to `shipped` (e.g. `JNE-88991234`) |
+  | `cancellation_reason` | String | Conditional | **Required** when status is updated to `cancelled` (e.g. `Customer changed mind`) |
 
 ---
 
 ##### `DELETE /orders/<id>`
 - **Auth**: JWT Required
-- **Description**: Soft-cancel an order. Sets `status = 'cancelled'`, restores product stock balances to inventory, preserves order record for audit history, and returns `200 OK`.
+- **Description**: Soft-cancel an order (`pending` or `paid`). Sets `status = 'cancelled'`, requires a `cancellation_reason` (via JSON body `{"cancellation_reason": "..."}` or query param), restores product stock balances, preserves audit history, and returns `200 OK`.
 
 ---
 

@@ -31,7 +31,9 @@ def test_order_to_dict_method(app):
         status="shipped",
         shipping_address="456 Sunset Boulevard",
         recipient_name="Bob Builder",
-        recipient_phone="+1234567890"
+        recipient_phone="+1234567890",
+        tracking_number="JNE-12345678",
+        cancellation_reason=None
     )
 
     data = order.to_dict()
@@ -41,3 +43,5 @@ def test_order_to_dict_method(app):
     assert data["total_amount"] == 89.90
     assert data["status"] == "shipped"
     assert data["recipient_name"] == "Bob Builder"
+    assert data["tracking_number"] == "JNE-12345678"
+    assert data["cancellation_reason"] is None

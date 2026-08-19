@@ -355,8 +355,13 @@ def update_order_status(update_data, id):
             }), 403
 
     try:
-        # If transitioning to cancelled, restore stock for all items with row lock
+        # If transitioning to shipped, record tracking number
+        if new_status == 'shipped':
+            order.tracking_number = update_data['tracking_number'].strip()
+
+        # If transitioning to cancelled, restore stock for all items with row lock and record cancellation reason
         if new_status == 'cancelled':
+            order.cancellation_reason = update_data['cancellation_reason'].strip()
             items_to_restore = db.session.execute(
                 order_items.select().where(order_items.c.order_id == id)
             ).fetchall()
@@ -416,7 +421,8 @@ def delete_order(id):
     """Soft-cancel an order.
     Only orders with status 'pending' or 'paid' can be cancelled.
     Admins/Superadmins can cancel any eligible order; customers only their own.
-    Cancelled orders will have their product stock restored. Order history is preserved.
+    Cancelled orders require a cancellation_reason (via JSON body or query param).
+    Stock is restored and order history is preserved.
     """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
@@ -443,6 +449,17 @@ def delete_order(id):
             )
         }), 409
 
+    body = request.get_json(silent=True) or {}
+    cancellation_reason = body.get('cancellation_reason') or request.args.get('cancellation_reason')
+    if not cancellation_reason or not str(cancellation_reason).strip():
+        return jsonify({
+            "error_code": "VALIDATION_ERROR",
+            "message": "cancellation_reason is required when cancelling an order.",
+            "details": {
+                "cancellation_reason": ["cancellation_reason is required when cancelling an order."]
+            }
+        }), 422
+
     try:
         # Restore stock for each item in the order with row lock
         items_to_restore = db.session.execute(
@@ -454,8 +471,9 @@ def delete_order(id):
             if product:
                 product.stock += item.quantity
 
-        # Soft-cancel: mark as cancelled, preserve the row and all history
+        # Soft-cancel: mark as cancelled, record reason, preserve the row and all history
         order.status = 'cancelled'
+        order.cancellation_reason = str(cancellation_reason).strip()
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
