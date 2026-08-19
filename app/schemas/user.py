@@ -13,7 +13,7 @@ class UserRegisterInputSchema(Schema):
     email = fields.Email(required=True)
     password = fields.Str(load_only=True)
     password_hash = fields.Str(load_only=True)
-    role = fields.Str(load_default="customer", validate=validate.OneOf(["superadmin", "admin", "seller", "customer"]))
+    role = fields.Str(load_default="customer", validate=validate.OneOf(["superadmin", "admin", "customer"]))
 
     @validates_schema
     def validate_password_presence(self, data, **kwargs):

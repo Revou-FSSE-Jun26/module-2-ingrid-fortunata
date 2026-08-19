@@ -78,7 +78,7 @@ def get_user_by_id(id):
             'message': 'Authenticated user not found.'
         }), 401
 
-    is_admin = requester.role in ['superadmin', 'admin', 'seller']
+    is_admin = requester.role in ['superadmin', 'admin']
     if not is_admin and requester_id != id:
         return jsonify({
             'error_code': 'USER_FORBIDDEN',

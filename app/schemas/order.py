@@ -15,9 +15,9 @@ class OrderItemInputSchema(Schema):
 
 class OrderCreateInputSchema(Schema):
     items = fields.List(fields.Nested(OrderItemInputSchema), required=True)
-    shipping_address = fields.Str(required=True)
-    recipient_name = fields.Str(required=True)
-    recipient_phone = fields.Str(required=True)
+    shipping_address = fields.Str(required=True, validate=validate.Length(min=1))
+    recipient_name = fields.Str(required=True, validate=validate.Length(min=1))
+    recipient_phone = fields.Str(required=True, validate=validate.Length(min=1))
 
     @validates("items")
     def validate_items(self, value, **kwargs):
@@ -29,9 +29,9 @@ class OrderResponseSchema(Schema):
     user_id = fields.Int(dump_only=True)
     total_amount = fields.Float(dump_only=True)
     status = fields.Str(dump_only=True)
-    shipping_address = fields.Str(dump_only=True, allow_none=True)
-    recipient_name = fields.Str(dump_only=True, allow_none=True)
-    recipient_phone = fields.Str(dump_only=True, allow_none=True)
+    shipping_address = fields.Str(dump_only=True)
+    recipient_name = fields.Str(dump_only=True)
+    recipient_phone = fields.Str(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 
@@ -41,8 +41,8 @@ class OrderDetailItemSchema(Schema):
     description = fields.Str(allow_none=True)
     quantity = fields.Int()
     price_at_purchase = fields.Float()
-    size = fields.Str(allow_none=True)
-    color = fields.Str(allow_none=True)
+    size = fields.Str()
+    color = fields.Str()
 
 class OrderDetailSchema(OrderResponseSchema):
     items = fields.List(fields.Nested(OrderDetailItemSchema), dump_only=True)
