@@ -127,18 +127,20 @@ def get_all_products():
             )
         )
 
-    # Sorting
+    # Sorting: Default is newest/recently updated first (updated_at desc, id desc)
     sort_by = request.args.get('sort_by')
-    if sort_by == 'price_asc':
+    if sort_by == 'oldest':
+        products_query = products_query.order_by(Product.updated_at.asc(), Product.id.asc())
+    elif sort_by == 'price_asc':
         products_query = products_query.order_by(Product.price.asc(), Product.id.asc())
     elif sort_by == 'price_desc':
         products_query = products_query.order_by(Product.price.desc(), Product.id.asc())
-    elif sort_by == 'newest':
-        products_query = products_query.order_by(Product.created_at.desc(), Product.id.asc())
     elif sort_by == 'name_asc':
         products_query = products_query.order_by(Product.name.asc(), Product.id.asc())
-    else:
-        products_query = products_query.order_by(Product.id.asc())
+    elif sort_by == 'name_desc':
+        products_query = products_query.order_by(Product.name.desc(), Product.id.asc())
+    else:  # default or 'newest'
+        products_query = products_query.order_by(Product.updated_at.desc(), Product.id.desc())
 
     # Pagination (clamped)
     page, per_page = _safe_page_params()
