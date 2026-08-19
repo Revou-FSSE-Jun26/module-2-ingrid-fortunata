@@ -59,6 +59,17 @@ def get_all_products():
     if material:
         products_query = products_query.filter(Product.material.ilike(f'%{material}%'))
 
+    # Free-text search across name and description
+    search = request.args.get('search')
+    if search:
+        search_term = f'%{search}%'
+        products_query = products_query.filter(
+            db.or_(
+                Product.name.ilike(search_term),
+                Product.description.ilike(search_term)
+            )
+        )
+
     # Pagination
     page = request.args.get('page', None, type=int)
     per_page = request.args.get('per_page', None, type=int)

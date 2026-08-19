@@ -14,7 +14,7 @@ The project is built progressively across bi-weekly checkpoints, covering **Chec
 
 - ✅ PostgreSQL schema with 6 tables (`users`, `categories`, `products`, `product_images`, `orders`, `order_items`) with proper foreign key constraints
 - ✅ Fashion-specific product attributes: `size` (XS–XXL, FREE), `color`, `material`, `gender` (Men, Women, Unisex, Kids), and unique `sku`
-- ✅ Query filtering on `GET /products` by `gender`, `size`, `color`, and `material`
+- ✅ Query filtering on `GET /products` by `gender`, `size`, `color`, `material`, and free-text `search` (name + description)
 - ✅ Fashion order item variant tracking (`size` and `color` stored in `order_items` at purchase time)
 - ✅ Flask application factory pattern with environment-based configuration
 - ✅ SQLAlchemy ORM models for all entities (`User`, `Category`, `Product`, `ProductImage`, `Order`, `order_items`)
@@ -25,8 +25,11 @@ The project is built progressively across bi-weekly checkpoints, covering **Chec
 - ✅ Many-to-many relationship between `orders` and `products` via the `order_items` association table
 - ✅ Product image support (base64-encoded, up to 3 images per product, one primary)
 - ✅ Stock decrement on order creation with validation guard
-- ✅ Stock restoration when an order is cancelled
+- ✅ Stock restoration when an order is cancelled (both via `DELETE` and `PATCH → cancelled`)
 - ✅ Order status lifecycle enforcement with role-based transition rules
+- ✅ Soft-cancel on `DELETE /orders/<id>` — order history preserved, stock restored, status set to `cancelled`
+- ✅ Shipping details (`shipping_address`, `recipient_name`, `recipient_phone`) captured on order creation
+- ✅ `GET /users/<id>` protected by JWT; customers can only view their own profile
 - ✅ Swagger / OpenAPI 3.0 interactive documentation via Flask-Smorest
 - ✅ Consistent JSON error response structure across all endpoints
 
@@ -222,7 +225,11 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 
 > \* Admin / Seller / Superadmin only. Customers can only trigger: `pending → paid`, `pending → cancelled`, `paid → cancelled`.
 
-> **Cancellation & stock**: When an order is cancelled, all product stock quantities are automatically restored.
+> **Cancellation & stock**: When an order is cancelled (via `DELETE` or `PATCH` with `status: cancelled`), all product stock quantities are automatically restored.
+
+> **Order history preserved**: `DELETE /orders/<id>` is a soft-cancel — it sets `status = 'cancelled'` and restores stock but **keeps the order row in the database**. Financial and audit history is never lost.
+
+> **Refund policy**: Cancellations from `pending` or `paid` trigger stock restoration (representing a refund). Orders that have reached `delivered` cannot be cancelled or refunded.
 
 ---
 
@@ -239,13 +246,13 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 | Method | Endpoint      | Auth | Description                                       |
 | :----- | :------------ | :--- | :------------------------------------------------ |
 | `POST` | `/users`      | None | Register a new user; defaults role to `customer`  |
-| `GET`  | `/users/<id>` | None | Retrieve a user by ID; returns `404` if not found |
+| `GET`  | `/users/<id>` | JWT  | Retrieve own profile (customers) or any user (admin/seller/superadmin) |
 
 ### Products
 
 | Method   | Endpoint         | Auth Required                   | Description                                    |
 | :------- | :--------------- | :------------------------------ | :--------------------------------------------- |
-| `GET`    | `/products`      | None                            | List active products (supports `?gender=`, `?size=`, `?color=`, `?material=`, `?page=`, `?per_page=`) |
+| `GET`    | `/products`      | None                            | List active products (supports `?gender=`, `?size=`, `?color=`, `?material=`, `?search=`, `?page=`, `?per_page=`) |
 | `GET`    | `/products/<id>` | None                            | Get a single active product with all images and fashion attributes |
 | `POST`   | `/products`      | `superadmin`, `admin`, `seller` | Create a new clothing product with fashion attributes (`size`, `color`, `material`, `gender`, `sku`) and images |
 | `PUT`    | `/products/<id>` | `superadmin`, `admin`, `seller` | Update a product and replace its images/fashion attributes |
@@ -267,9 +274,9 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 | :------- | :-------------- | :---------------- | :-------------------------------------------------------------------------- |
 | `GET`    | `/orders`       | All authenticated | Admins/sellers see all orders; customers see only their own                 |
 | `GET`    | `/orders/<id>`  | All authenticated | View order detail with items; customers restricted to their own orders      |
-| `POST`   | `/orders`       | All authenticated | Place a new order; validates stock and decrements on success                |
-| `PATCH`  | `/orders/<id>`  | All authenticated | Update order status following the lifecycle rules (see Status Transitions)  |
-| `DELETE` | `/orders/<id>`  | All authenticated | Cancel an order (only `pending`/`paid`); restores product stock             |
+| `POST`   | `/orders`       | All authenticated | Place a new order; requires `items`, `shipping_address`, `recipient_name`, `recipient_phone`; validates stock and decrements on success |
+| `PATCH`  | `/orders/<id>`  | All authenticated | Update order status following the lifecycle rules; restores stock if transitioning to `cancelled` |
+| `DELETE` | `/orders/<id>`  | All authenticated | Soft-cancel an order (only `pending`/`paid`); restores stock, preserves row, returns `200` with cancelled order |
 
 ---
 

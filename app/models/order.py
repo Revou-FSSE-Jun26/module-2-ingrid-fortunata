@@ -20,6 +20,9 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
     total_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     status = db.Column(db.String(50), nullable=False, default='pending')
+    shipping_address = db.Column(db.Text, nullable=True)
+    recipient_name = db.Column(db.String(150), nullable=True)
+    recipient_phone = db.Column(db.String(30), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -33,6 +36,9 @@ class Order(db.Model):
             'user_id': self.user_id,
             'total_amount': float(self.total_amount) if self.total_amount is not None else 0.0,
             'status': self.status,
+            'shipping_address': self.shipping_address,
+            'recipient_name': self.recipient_name,
+            'recipient_phone': self.recipient_phone,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

@@ -75,7 +75,10 @@ def create_order(order_data):
         new_order = Order(
             user_id=user_id,
             total_amount=total_amount,
-            status='pending'
+            status='pending',
+            shipping_address=order_data.get('shipping_address'),
+            recipient_name=order_data.get('recipient_name'),
+            recipient_phone=order_data.get('recipient_phone')
         )
         db.session.add(new_order)
         db.session.flush()  # Dapatkan new_order.id tanpa commit dulu
@@ -292,6 +295,16 @@ def update_order_status(update_data, id):
             }), 403
 
     try:
+        # If transitioning to cancelled, restore stock for all items first
+        if new_status == 'cancelled':
+            items_to_restore = db.session.execute(
+                order_items.select().where(order_items.c.order_id == id)
+            ).fetchall()
+            for item in items_to_restore:
+                product = db.session.get(Product, item.product_id)
+                if product:
+                    product.stock += item.quantity
+
         order.status = new_status
         db.session.commit()
     except SQLAlchemyError:
@@ -336,10 +349,11 @@ CANCELLABLE_STATUSES = {'pending', 'paid'}
 
 @orders_bp.route('/orders/<int:id>', methods=['DELETE'])
 @jwt_required()
+@orders_bp.response(200, OrderResponseWrapperSchema)
 def delete_order(id):
-    """Cancel an order. Only orders with status 'pending' or 'paid' can be cancelled.
+    """Soft-cancel an order. Only orders with status 'pending' or 'paid' can be cancelled.
     Admins/Sellers/Superadmins can cancel any eligible order, customers only their own.
-    Cancelled orders will have their product stock restored.
+    Cancelled orders will have their product stock restored. Order history is preserved.
     """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
@@ -366,7 +380,7 @@ def delete_order(id):
         }), 409
 
     try:
-        # Restore stock for each item in the order before deleting
+        # Restore stock for each item in the order
         items_to_restore = db.session.execute(
             order_items.select().where(order_items.c.order_id == id)
         ).fetchall()
@@ -376,9 +390,8 @@ def delete_order(id):
             if product:
                 product.stock += item.quantity
 
-        # Delete order_items first due to RESTRICT constraint
-        db.session.execute(order_items.delete().where(order_items.c.order_id == id))
-        db.session.delete(order)
+        # Soft-cancel: mark as cancelled, preserve the row and all history
+        order.status = 'cancelled'
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
@@ -387,4 +400,32 @@ def delete_order(id):
             "message": "An error occurred while cancelling the order."
         }), 500
 
-    return '', 204
+    # Build response with items
+    items_query = db.session.query(
+        order_items.c.product_id,
+        order_items.c.quantity,
+        order_items.c.price_at_purchase,
+        order_items.c.size,
+        order_items.c.color,
+        Product.name,
+        Product.description
+    ).join(
+        Product, order_items.c.product_id == Product.id
+    ).filter(
+        order_items.c.order_id == id
+    ).all()
+
+    detailed_items = [{
+        "product_id": row.product_id,
+        "name": row.name,
+        "description": row.description,
+        "quantity": row.quantity,
+        "price_at_purchase": float(row.price_at_purchase),
+        "size": row.size,
+        "color": row.color
+    } for row in items_query]
+
+    order_payload = order.to_dict()
+    order_payload['items'] = detailed_items
+
+    return jsonify({"data": order_payload}), 200
