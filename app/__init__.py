@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify
 from sqlalchemy import text
 from app.config import Config
-from app.extensions import db, migrate, api, jwt
+from app.extensions import db, migrate, api, jwt, cors
 
 
 def create_app(config_class=Config):
@@ -10,6 +10,11 @@ def create_app(config_class=Config):
     flask_app.config.from_object(config_class)
 
     # Initialize extensions
+    cors.init_app(
+        flask_app,
+        resources={r"/*": {"origins": flask_app.config.get('CORS_ALLOWED_ORIGINS', '*')}},
+        supports_credentials=True
+    )
     db.init_app(flask_app)
     migrate.init_app(flask_app, db)
     api.init_app(flask_app)
