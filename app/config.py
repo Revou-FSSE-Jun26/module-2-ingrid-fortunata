@@ -6,7 +6,13 @@ from datetime import timedelta
 load_dotenv()
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'default-dev-key-revoshop')
+    # Environment and secret key configuration
+    SECRET_KEY = os.getenv('SECRET_KEY')
+    if not SECRET_KEY:
+        if os.getenv('FLASK_ENV') == 'production':
+            raise ValueError("CRITICAL: SECRET_KEY environment variable MUST be set in production!")
+        SECRET_KEY = 'default-dev-key-revoshop'
+
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
     
