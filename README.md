@@ -71,11 +71,17 @@ SECRET_KEY=dev-secret-key-change-in-production
 JWT_SECRET_KEY=dev-jwt-secret-change-in-production
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/revoshop_db
+
+# Locust Load Testing Configuration
+LOCUST_HOST=http://127.0.0.1:5000
+LOCUST_USER_USERNAME=alice_smith
+LOCUST_USER_PASSWORD=alice_password
 ```
 
 > 💡 **Notes**:
 > - Replace `postgres:postgres@localhost:5432` with your actual local PostgreSQL user, password, host, and port.
 > - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed frontend domains (e.g. `http://localhost:3000,http://localhost:5173,http://localhost:8080` or `*` for development).
+> - `LOCUST_HOST`: The base URL targeting the backend API during load tests (defaults to `http://127.0.0.1:5000`).
 
 
 ---
@@ -1035,3 +1041,55 @@ Client HTTP Request
    flask db migrate -m "Describe model changes"
    flask db upgrade
    ```
+
+---
+
+## Performance & Load Testing (Locust)
+
+The repository includes a comprehensive load testing suite implemented with **Locust** (`locustfile.py`) to benchmark and stress-test the REST API under high concurrency.
+
+### Sequential User Journey Architecture
+Each simulated customer executes a strict 4-step sequence using Locust's `SequentialTaskSet`:
+1. **`on_start` (Authentication)**: Authenticates via `POST /auth/login` (defaulting to seeded customer `alice_smith` or dynamic user registration fallback) and attaches the JWT Bearer Token to all subsequent requests.
+2. **Step 1 (`GET /products`)**: Fetches active product catalog (with pagination/filters) and picks a product variant dynamically.
+3. **Step 2 (`GET /products/:id`)**: Retrieves detailed product attributes and metadata.
+4. **Step 3 (`POST /orders`)**: Places an authenticated order with recipient contact, address, and selected product item.
+5. **Step 4 (`GET /orders/:id`)**: Fetches and verifies the newly created order by ID.
+
+### Running Locust Load Simulation
+
+> 💡 **Environment Configuration**: `locustfile.py` automatically reads `LOCUST_HOST`, `LOCUST_USER_USERNAME`, and `LOCUST_USER_PASSWORD` from your `.env` file (with fallback to `http://127.0.0.1:5000` and `alice_smith`). You can simply run `locust` without needing to pass `--host` every time.
+
+#### 1. Start the Flask Backend Server
+In one terminal window, activate the virtual environment and start the server:
+```bash
+source venv/bin/activate
+python run.py
+```
+*(Server listens on `http://127.0.0.1:5000`)*
+
+#### 2. Option A: Interactive Web UI Mode
+Start Locust and access the real-time analytics dashboard at `http://127.0.0.1:8089`:
+```bash
+locust
+```
+*(Or specify explicitly: `locust -f locustfile.py --host=http://127.0.0.1:5000`)*
+- **Host**: `http://127.0.0.1:5000` (pre-filled from `.env`)
+- **Number of users**: `200`
+- **Ramp-up (spawn rate)**: `10` users/second
+
+#### 3. Option B: Automated Headless Simulation (Gradual Ramp 50 to 200 Users)
+To run automated benchmarks with HTML and CSV reports generated upon completion:
+```bash
+# Uses the built-in GradualRampLoadShape (50 -> 100 -> 200 users over 5 minutes)
+locust -f locustfile.py --host=http://127.0.0.1:5000 --headless --html locust_report.html --csv locust_stats
+
+# Or specify custom peak users directly via CLI
+locust -f locustfile.py --host=http://127.0.0.1:5000 --headless -u 200 -r 10 --run-time 3m --html locust_report.html
+```
+
+### Key Performance Metrics Tracked
+- **RPS (Requests Per Second)**: System throughput under peak user concurrency.
+- **Response Times (Median, 95th & 99th Percentile)**: Latency distribution for catalog browsing vs database write operations.
+- **Failures & Error Rate %**: Verification that order placement and database locking maintain integrity without unhandled 500 errors.
+
