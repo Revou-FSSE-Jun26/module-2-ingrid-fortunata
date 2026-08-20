@@ -4,10 +4,12 @@ from flask_smorest import Api
 from werkzeug.exceptions import HTTPException
 from flask import jsonify
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 
 db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
+cors = CORS()
 
 class CustomApi(Api):
     def handle_http_exception(self, error: HTTPException):

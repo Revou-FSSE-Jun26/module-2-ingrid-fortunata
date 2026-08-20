@@ -69,10 +69,14 @@ FLASK_APP=run.py
 FLASK_ENV=development
 SECRET_KEY=dev-secret-key-change-in-production
 JWT_SECRET_KEY=dev-jwt-secret-change-in-production
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/revoshop_db
 ```
 
-> 💡 **Note**: Replace `postgres:postgres@localhost:5432` with your actual local PostgreSQL user, password, host, and port.
+> 💡 **Notes**:
+> - Replace `postgres:postgres@localhost:5432` with your actual local PostgreSQL user, password, host, and port.
+> - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed frontend domains (e.g. `http://localhost:3000,http://localhost:5173,http://localhost:8080` or `*` for development).
+
 
 ---
 
@@ -196,6 +200,7 @@ JOIN products p ON oi.product_id = p.id;
 - ✅ **Automated Stock Control**: Stock is decremented on order placement and restored upon order cancellation.
 - ✅ **Soft-Cancel Order Deletion**: `DELETE /orders/<id>` performs a soft cancel (restores stock, sets status to `cancelled`, preserves audit row).
 - ✅ **Consistent Error Responses**: All API errors — including schema validation failures (422), JWT issues, and server errors — return a unified `{error_code, message}` JSON shape via global error handlers.
+- ✅ **Cross-Origin Resource Sharing (CORS)**: Built-in `Flask-CORS` support for cross-domain requests from frontend frameworks (React, Vue, Next.js) with configurable origin whitelist (`CORS_ALLOWED_ORIGINS`).
 - ✅ **API & Database Health Check**: Dedicated `GET /health` endpoint for infrastructure liveness/readiness probes (PostgreSQL connection check & UTC timestamps).
 - ✅ **OpenAPI 3.0 / Swagger UI**: Auto-generated interactive API docs via `Flask-Smorest` and `marshmallow`.
 
@@ -207,6 +212,7 @@ JOIN products p ON oi.product_id = p.id;
 | :--- | :--- | :--- |
 | **Python** | 3.x | Primary programming language |
 | **Flask** | 3.0.3 | Web framework & App Factory pattern |
+| **Flask-CORS** | 6.0.5 | Cross-Origin Resource Sharing middleware |
 | **Flask-SQLAlchemy** | 3.1.1 | Object-Relational Mapping (ORM) layer |
 | **Flask-Migrate** | 4.0.7 | Database migration management (Alembic) |
 | **Flask-Smorest** | 0.47.0 | OpenAPI 3.0 specification & Swagger UI generation |

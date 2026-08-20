@@ -26,3 +26,12 @@ def test_health_check_unhealthy(client):
         assert "disconnected" in data["database"]
         assert "Database connection timeout" in data["database"]
         assert "timestamp" in data
+
+
+def test_cors_headers(client):
+    """Verify CORS headers are present in response."""
+    response = client.get('/health', headers={'Origin': 'http://localhost:3000'})
+    assert response.status_code == 200
+    assert response.headers.get('Access-Control-Allow-Origin') == 'http://localhost:3000'
+    assert response.headers.get('Access-Control-Allow-Credentials') == 'true'
+

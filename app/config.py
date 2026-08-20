@@ -15,6 +15,9 @@ class Config:
 
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
+
+    # CORS configuration
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', '*').split(',') if origin.strip()]
     
     # Configure PostgreSQL database URI
     DATABASE_URL = os.getenv('DATABASE_URL')
