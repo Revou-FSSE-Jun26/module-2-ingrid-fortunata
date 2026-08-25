@@ -8,7 +8,10 @@
 
 It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC) with simplified roles (`superadmin`, `admin`, `customer`).
 
+> 📷 **Checkpoint 3 Postman Verification**: For complete visual proof of all Postman requests (GET, POST, PUT, PATCH, DELETE) for Products, Categories, Orders, and database views, see [**CHECKPOINT3_SCREENSHOTS.md**](./CHECKPOINT3_SCREENSHOTS.md).
+
 This document serves as a complete technical guide for **Backend Developers** (understanding architecture, DB design rationale, ORM models, migrations, and local setup) and **Frontend Developers** (implementing UI workflows, request payloads, response formats, headers, and enum options).
+
 
 ---
 
