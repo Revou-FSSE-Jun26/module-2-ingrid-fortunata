@@ -4,14 +4,13 @@
 
 ## Executive Overview
 
-**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, and **PostgreSQL**. 
+**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, and **PostgreSQL**.
 
 It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC) with simplified roles (`superadmin`, `admin`, `customer`).
 
 > 📷 **Checkpoint 3 Postman Verification**: For complete visual proof of all Postman requests (GET, POST, PUT, PATCH, DELETE) for Products, Categories, Orders, and database views, see [**CHECKPOINT3_SCREENSHOTS.md**](./CHECKPOINT3_SCREENSHOTS.md).
 
 This document serves as a complete technical guide for **Backend Developers** (understanding architecture, DB design rationale, ORM models, migrations, and local setup) and **Frontend Developers** (implementing UI workflows, request payloads, response formats, headers, and enum options).
-
 
 ---
 
@@ -67,6 +66,7 @@ cp .env.example .env
 ```
 
 Edit `.env`:
+
 ```env
 FLASK_APP=run.py
 FLASK_ENV=development
@@ -82,10 +82,10 @@ LOCUST_USER_PASSWORD=alice_password
 ```
 
 > 💡 **Notes**:
+>
 > - Replace `postgres:postgres@localhost:5432` with your actual local PostgreSQL user, password, host, and port.
 > - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed frontend domains (e.g. `http://localhost:3000,http://localhost:5173,http://localhost:8080` or `*` for development).
 > - `LOCUST_HOST`: The base URL targeting the backend API during load tests (defaults to `http://127.0.0.1:5000`).
-
 
 ---
 
@@ -98,6 +98,7 @@ flask db upgrade
 ```
 
 > **Migration History**:
+>
 > - Initial migration creates base tables: `users`, `categories`, `products`, `product_images`, `orders`, `order_items`.
 > - Revision `aa0fd34ebf0e` applies the `role` column to `users`.
 > - Revision `b102e24f5184` simplifies user roles, sets size default to 'Free Size', color to NOT NULL, gender default to 'Unisex', sku to NOT NULL with auto-generation, shipping fields to NOT NULL, and order items size/color to NOT NULL.
@@ -114,11 +115,11 @@ PYTHONPATH=. python3 app/seed_data.py
 
 ##### Pre-Configured Seed Users for Testing
 
-| Username | Email | Password | Role | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `superadmin_user` | `superadmin@revofashion.com` | `superadmin_password` | `superadmin` | Full system access |
-| `admin_user` | `admin@revofashion.com` | `admin_password` | `admin` | Catalog & order admin / staff |
-| `alice_smith` | `alice@example.com` | `alice_password` | `customer` | Test customer |
+| Username          | Email                        | Password              | Role         | Description                   |
+| :---------------- | :--------------------------- | :-------------------- | :----------- | :---------------------------- |
+| `superadmin_user` | `superadmin@revofashion.com` | `superadmin_password` | `superadmin` | Full system access            |
+| `admin_user`      | `admin@revofashion.com`      | `admin_password`      | `admin`      | Catalog & order admin / staff |
+| `alice_smith`     | `alice@example.com`          | `alice_password`      | `customer`   | Test customer                 |
 
 ---
 
@@ -126,6 +127,12 @@ PYTHONPATH=. python3 app/seed_data.py
 
 ```bash
 python3 run.py
+```
+
+or
+
+```bash
+flask run
 ```
 
 The API server will launch at: **`http://127.0.0.1:5000`**
@@ -165,10 +172,11 @@ pytest --cov=app --cov-report=html
 ```
 
 ##### 📊 Understanding Pytest Output & Test Summary
-* **`PASSED`** (Green): All assertions inside the test passed.
-* **`FAILED`** (Red): An assertion or error condition failed (shows readable visual diffs).
-* **`XFAIL`** (Yellow): Expected failure marked via `@pytest.mark.xfail` (does not break CI build).
-* **Summary Bar**: Displays the overall execution time and total counts (e.g., `189 passed, 1 xfailed in 16.43s`).
+
+- **`PASSED`** (Green): All assertions inside the test passed.
+- **`FAILED`** (Red): An assertion or error condition failed (shows readable visual diffs).
+- **`XFAIL`** (Yellow): Expected failure marked via `@pytest.mark.xfail` (does not break CI build).
+- **Summary Bar**: Displays the overall execution time and total counts (e.g., `189 passed, 1 xfailed in 16.43s`).
 
 ---
 
@@ -181,13 +189,13 @@ You can verify database seeding directly via `psql`:
 \dt
 
 -- Query order items junction table snapshotting
-SELECT 
-    o.id AS order_id, 
-    u.username, 
-    p.name AS product_name, 
-    oi.size, 
-    oi.color, 
-    oi.quantity, 
+SELECT
+    o.id AS order_id,
+    u.username,
+    p.name AS product_name,
+    oi.size,
+    oi.color,
+    oi.quantity,
     oi.price_at_purchase
 FROM orders o
 JOIN users u ON o.user_id = u.id
@@ -218,21 +226,21 @@ JOIN products p ON oi.product_id = p.id;
 
 ## Technology Stack & Architecture
 
-| Layer / Technology | Version | Purpose |
-| :--- | :--- | :--- |
-| **Python** | 3.x | Primary programming language |
-| **Flask** | 3.0.3 | Web framework & App Factory pattern |
-| **Flask-CORS** | 6.0.5 | Cross-Origin Resource Sharing middleware |
-| **Flask-SQLAlchemy** | 3.1.1 | Object-Relational Mapping (ORM) layer |
-| **Flask-Migrate** | 4.0.7 | Database migration management (Alembic) |
-| **Flask-Smorest** | 0.47.0 | OpenAPI 3.0 specification & Swagger UI generation |
-| **Flask-JWT-Extended** | 4.6.0 | Stateless JSON Web Token authentication |
-| **marshmallow** | 4.3.1 | Input validation & serialization schemas |
-| **pytest** | 9.1.1 | Automated testing framework |
-| **pytest-cov** | 7.1.0 | Code coverage measurement & reporting |
-| **Werkzeug** | 3.1.8 | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
-| **psycopg2-binary** | 2.9.12 | PostgreSQL database driver |
-| **python-dotenv** | 1.0.1 | Local environment configuration management |
+| Layer / Technology     | Version | Purpose                                                                    |
+| :--------------------- | :------ | :------------------------------------------------------------------------- |
+| **Python**             | 3.x     | Primary programming language                                               |
+| **Flask**              | 3.0.3   | Web framework & App Factory pattern                                        |
+| **Flask-CORS**         | 6.0.5   | Cross-Origin Resource Sharing middleware                                   |
+| **Flask-SQLAlchemy**   | 3.1.1   | Object-Relational Mapping (ORM) layer                                      |
+| **Flask-Migrate**      | 4.0.7   | Database migration management (Alembic)                                    |
+| **Flask-Smorest**      | 0.47.0  | OpenAPI 3.0 specification & Swagger UI generation                          |
+| **Flask-JWT-Extended** | 4.6.0   | Stateless JSON Web Token authentication                                    |
+| **marshmallow**        | 4.3.1   | Input validation & serialization schemas                                   |
+| **pytest**             | 9.1.1   | Automated testing framework                                                |
+| **pytest-cov**         | 7.1.0   | Code coverage measurement & reporting                                      |
+| **Werkzeug**           | 3.1.8   | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
+| **psycopg2-binary**    | 2.9.12  | PostgreSQL database driver                                                 |
+| **python-dotenv**      | 1.0.1   | Local environment configuration management                                 |
 
 ### Project Directory Structure
 
@@ -308,15 +316,15 @@ The database consists of **6 normalized tables** designed for scalable fashion e
 
 Stores registered user accounts, login credentials, and permission roles.
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique user ID |
-| `username` | `VARCHAR(50)` | `UNIQUE`, `NOT NULL` | Unique account username |
-| `email` | `VARCHAR(120)` | `UNIQUE`, `NOT NULL` | Unique email address |
-| `password_hash` | `VARCHAR(255)` | `NOT NULL` | PBKDF2/scrypt hashed password |
-| `role` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'customer'` | User role enum (`superadmin`, `admin`, `customer`) |
-| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Account status toggle |
-| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Account creation timestamp |
+| Column          | Data Type      | Constraints                      | Description                                        |
+| :-------------- | :------------- | :------------------------------- | :------------------------------------------------- |
+| `id`            | `INTEGER`      | `PRIMARY KEY`, Auto-increment    | Unique user ID                                     |
+| `username`      | `VARCHAR(50)`  | `UNIQUE`, `NOT NULL`             | Unique account username                            |
+| `email`         | `VARCHAR(120)` | `UNIQUE`, `NOT NULL`             | Unique email address                               |
+| `password_hash` | `VARCHAR(255)` | `NOT NULL`                       | PBKDF2/scrypt hashed password                      |
+| `role`          | `VARCHAR(50)`  | `NOT NULL`, `DEFAULT 'customer'` | User role enum (`superadmin`, `admin`, `customer`) |
+| `is_active`     | `BOOLEAN`      | `NOT NULL`, `DEFAULT true`       | Account status toggle                              |
+| `created_at`    | `TIMESTAMP`    | `DEFAULT UTC`                    | Account creation timestamp                         |
 
 - **Design Rationale (Why)**:
   - **Password Security**: Passwords are never stored in plain text. Hashing via Werkzeug ensures resistance to dictionary and rainbow table attacks.
@@ -327,15 +335,15 @@ Stores registered user accounts, login credentials, and permission roles.
 
 #### 2. `categories` — Product Categories
 
-Organizes clothing items into logical catalog sections (e.g., *T-Shirts*, *Outerwear*).
+Organizes clothing items into logical catalog sections (e.g., _T-Shirts_, _Outerwear_).
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique category ID |
-| `name` | `VARCHAR(100)` | `UNIQUE`, `NOT NULL` | Category name |
-| `description` | `TEXT` | `NULLABLE` | Optional category overview |
-| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Hides category from public list |
-| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Creation timestamp |
+| Column        | Data Type      | Constraints                   | Description                     |
+| :------------ | :------------- | :---------------------------- | :------------------------------ |
+| `id`          | `INTEGER`      | `PRIMARY KEY`, Auto-increment | Unique category ID              |
+| `name`        | `VARCHAR(100)` | `UNIQUE`, `NOT NULL`          | Category name                   |
+| `description` | `TEXT`         | `NULLABLE`                    | Optional category overview      |
+| `is_active`   | `BOOLEAN`      | `NOT NULL`, `DEFAULT true`    | Hides category from public list |
+| `created_at`  | `TIMESTAMP`    | `DEFAULT UTC`                 | Creation timestamp              |
 
 - **Design Rationale (Why)**:
   - **Catalog Normalization**: Separated from `products` to prevent text duplication and enable category-level filtering.
@@ -348,22 +356,22 @@ Organizes clothing items into logical catalog sections (e.g., *T-Shirts*, *Outer
 
 Stores clothing items with fashion-specific attributes and stock balances.
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique product ID |
-| `category_id` | `INTEGER` | `FK → categories.id (SET NULL)` | Linked category |
-| `name` | `VARCHAR(150)` | `NOT NULL` | Clothing product title |
-| `description` | `TEXT` | `NULLABLE` | Detailed description |
-| `price` | `NUMERIC(10, 2)` | `NOT NULL` | Unit price |
-| `stock` | `INTEGER` | `NOT NULL`, `DEFAULT 0` | Available stock count |
-| `size` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'Free Size'` | Fashion size (`XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE`, `Free Size`) |
-| `color` | `VARCHAR(50)` | `NOT NULL` | Color variation |
-| `material` | `VARCHAR(150)` | `NULLABLE` | Fabric composition |
-| `gender` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'Unisex'` | Target demographic (`Men`, `Women`, `Unisex`, `Kids`) |
-| `sku` | `VARCHAR(50)` | `UNIQUE`, `NOT NULL` | Stock Keeping Unit code (auto-generated if omitted) |
-| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Soft delete flag |
-| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Creation timestamp |
-| `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Modification timestamp |
+| Column        | Data Type        | Constraints                       | Description                                                          |
+| :------------ | :--------------- | :-------------------------------- | :------------------------------------------------------------------- |
+| `id`          | `INTEGER`        | `PRIMARY KEY`, Auto-increment     | Unique product ID                                                    |
+| `category_id` | `INTEGER`        | `FK → categories.id (SET NULL)`   | Linked category                                                      |
+| `name`        | `VARCHAR(150)`   | `NOT NULL`                        | Clothing product title                                               |
+| `description` | `TEXT`           | `NULLABLE`                        | Detailed description                                                 |
+| `price`       | `NUMERIC(10, 2)` | `NOT NULL`                        | Unit price                                                           |
+| `stock`       | `INTEGER`        | `NOT NULL`, `DEFAULT 0`           | Available stock count                                                |
+| `size`        | `VARCHAR(20)`    | `NOT NULL`, `DEFAULT 'Free Size'` | Fashion size (`XS`, `S`, `M`, `L`, `XL`, `XXL`, `FREE`, `Free Size`) |
+| `color`       | `VARCHAR(50)`    | `NOT NULL`                        | Color variation                                                      |
+| `material`    | `VARCHAR(150)`   | `NULLABLE`                        | Fabric composition                                                   |
+| `gender`      | `VARCHAR(20)`    | `NOT NULL`, `DEFAULT 'Unisex'`    | Target demographic (`Men`, `Women`, `Unisex`, `Kids`)                |
+| `sku`         | `VARCHAR(50)`    | `UNIQUE`, `NOT NULL`              | Stock Keeping Unit code (auto-generated if omitted)                  |
+| `is_active`   | `BOOLEAN`        | `NOT NULL`, `DEFAULT true`        | Soft delete flag                                                     |
+| `created_at`  | `TIMESTAMP`      | `DEFAULT UTC`                     | Creation timestamp                                                   |
+| `updated_at`  | `TIMESTAMP`      | `DEFAULT UTC`                     | Modification timestamp                                               |
 
 - **Design Rationale (Why)**:
   - **Financial Precision (`NUMERIC(10,2)`)**: Uses fixed-point decimals instead of `FLOAT` to eliminate binary floating-point rounding errors during price calculations.
@@ -377,13 +385,13 @@ Stores clothing items with fashion-specific attributes and stock balances.
 
 Stores image records attached to products.
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique image ID |
-| `product_id` | `INTEGER` | `FK → products.id (CASCADE)`, `NOT NULL` | Parent product |
-| `image_base64` | `TEXT` | `NOT NULL` | Base64-encoded image string (~1MB max) |
-| `is_primary` | `BOOLEAN` | `NOT NULL`, `DEFAULT false` | Thumbnail selection flag |
-| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Upload timestamp |
+| Column         | Data Type   | Constraints                              | Description                            |
+| :------------- | :---------- | :--------------------------------------- | :------------------------------------- |
+| `id`           | `INTEGER`   | `PRIMARY KEY`, Auto-increment            | Unique image ID                        |
+| `product_id`   | `INTEGER`   | `FK → products.id (CASCADE)`, `NOT NULL` | Parent product                         |
+| `image_base64` | `TEXT`      | `NOT NULL`                               | Base64-encoded image string (~1MB max) |
+| `is_primary`   | `BOOLEAN`   | `NOT NULL`, `DEFAULT false`              | Thumbnail selection flag               |
+| `created_at`   | `TIMESTAMP` | `DEFAULT UTC`                            | Upload timestamp                       |
 
 - **Design Rationale (Why)**:
   - **Decoupled Gallery Table**: Normalizing images into a separate 1-to-many table allows products to store up to 3 images without cluttering the main `products` table.
@@ -396,19 +404,19 @@ Stores image records attached to products.
 
 Stores overall order metadata, buyer reference, status state, and delivery details.
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto-increment | Unique order ID |
-| `user_id` | `INTEGER` | `FK → users.id (RESTRICT)`, `NOT NULL` | Customer who placed order |
-| `total_amount` | `NUMERIC(10, 2)` | `NOT NULL`, `DEFAULT 0.00` | Order total monetary value |
-| `status` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'pending'` | Lifecycle status (`pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`) |
-| `shipping_address` | `TEXT` | `NOT NULL` | Delivery address snapshot |
-| `recipient_name` | `VARCHAR(150)` | `NOT NULL` | Recipient full name snapshot |
-| `recipient_phone` | `VARCHAR(30)` | `NOT NULL` | Contact phone number snapshot |
-| `tracking_number` | `VARCHAR(100)` | `NULLABLE` | Carrier tracking number (required when moving to `shipped`) |
-| `cancellation_reason` | `TEXT` | `NULLABLE` | Reason recorded when order is cancelled |
-| `created_at` | `TIMESTAMP` | `DEFAULT UTC` | Order timestamp |
-| `updated_at` | `TIMESTAMP` | `DEFAULT UTC` | Last status update timestamp |
+| Column                | Data Type        | Constraints                            | Description                                                                             |
+| :-------------------- | :--------------- | :------------------------------------- | :-------------------------------------------------------------------------------------- |
+| `id`                  | `INTEGER`        | `PRIMARY KEY`, Auto-increment          | Unique order ID                                                                         |
+| `user_id`             | `INTEGER`        | `FK → users.id (RESTRICT)`, `NOT NULL` | Customer who placed order                                                               |
+| `total_amount`        | `NUMERIC(10, 2)` | `NOT NULL`, `DEFAULT 0.00`             | Order total monetary value                                                              |
+| `status`              | `VARCHAR(50)`    | `NOT NULL`, `DEFAULT 'pending'`        | Lifecycle status (`pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`) |
+| `shipping_address`    | `TEXT`           | `NOT NULL`                             | Delivery address snapshot                                                               |
+| `recipient_name`      | `VARCHAR(150)`   | `NOT NULL`                             | Recipient full name snapshot                                                            |
+| `recipient_phone`     | `VARCHAR(30)`    | `NOT NULL`                             | Contact phone number snapshot                                                           |
+| `tracking_number`     | `VARCHAR(100)`   | `NULLABLE`                             | Carrier tracking number (required when moving to `shipped`)                             |
+| `cancellation_reason` | `TEXT`           | `NULLABLE`                             | Reason recorded when order is cancelled                                                 |
+| `created_at`          | `TIMESTAMP`      | `DEFAULT UTC`                          | Order timestamp                                                                         |
+| `updated_at`          | `TIMESTAMP`      | `DEFAULT UTC`                          | Last status update timestamp                                                            |
 
 - **Design Rationale (Why)**:
   - **FK Restrict (`ON DELETE RESTRICT`)**: Prevents deleting a user account if that user has existing order records, guaranteeing audit integrity.
@@ -422,14 +430,14 @@ Stores overall order metadata, buyer reference, status state, and delivery detai
 
 Associates `orders` and `products` while capturing transaction snapshots.
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `order_id` | `INTEGER` | `PK`, `FK → orders.id (RESTRICT)` | Linked order |
-| `product_id` | `INTEGER` | `PK`, `FK → products.id (RESTRICT)` | Linked product |
-| `quantity` | `INTEGER` | `NOT NULL`, `DEFAULT 1` | Purchased quantity |
-| `price_at_purchase` | `NUMERIC(10, 2)` | `NOT NULL` | Snapshot unit price at purchase time |
-| `size` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'Free Size'` | Purchased size variant |
-| `color` | `VARCHAR(50)` | `NOT NULL` | Purchased color variant |
+| Column              | Data Type        | Constraints                         | Description                          |
+| :------------------ | :--------------- | :---------------------------------- | :----------------------------------- |
+| `order_id`          | `INTEGER`        | `PK`, `FK → orders.id (RESTRICT)`   | Linked order                         |
+| `product_id`        | `INTEGER`        | `PK`, `FK → products.id (RESTRICT)` | Linked product                       |
+| `quantity`          | `INTEGER`        | `NOT NULL`, `DEFAULT 1`             | Purchased quantity                   |
+| `price_at_purchase` | `NUMERIC(10, 2)` | `NOT NULL`                          | Snapshot unit price at purchase time |
+| `size`              | `VARCHAR(20)`    | `NOT NULL`, `DEFAULT 'Free Size'`   | Purchased size variant               |
+| `color`             | `VARCHAR(50)`    | `NOT NULL`                          | Purchased color variant              |
 
 - **Design Rationale (Why - CRITICAL)**:
   - **Price & Variant Snapshotting**: Stores `price_at_purchase`, `size`, and `color` directly in the junction table. **Why?** Product prices or available attributes in the catalog change over time. Snapshotting ensures past financial totals and customer order history remain 100% accurate and immutable regardless of catalog updates.
@@ -443,11 +451,11 @@ User authorization is enforced via JWT claims and the custom `@roles_required` d
 
 ### Available Role Options (`role`)
 
-| Role | Access Scope & Description | Default? |
-| :--- | :--- | :--- |
-| `customer` | Standard retail customer. Can register, log in, place orders, view active products/categories, and view **only their own** profile and orders. | **Yes** (Default on `POST /users`) |
-| `admin` | System administrator / Store staff. Full operational access over catalog, categories, user profiles, and order lifecycles/statuses. | No |
-| `superadmin` | System owner. Unrestricted permissions across all system resources, users, configurations, and endpoints. | No |
+| Role         | Access Scope & Description                                                                                                                     | Default?                           |
+| :----------- | :--------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------- |
+| `customer`   | Standard retail customer. Can register, log in, place orders, view active products/categories, and view **only their own** profile and orders. | **Yes** (Default on `POST /users`) |
+| `admin`      | System administrator / Store staff. Full operational access over catalog, categories, user profiles, and order lifecycles/statuses.            | No                                 |
+| `superadmin` | System owner. Unrestricted permissions across all system resources, users, configurations, and endpoints.                                      | No                                 |
 
 ---
 
@@ -457,14 +465,14 @@ The `status` column on the `orders` table tracks the lifecycle of an order.
 
 ### Available Status Options (`status`)
 
-| Status | Description |
-| :--- | :--- |
-| `pending` | Order placed, stock reserved, awaiting payment (Default on order creation) |
-| `paid` | Customer completed payment |
-| `processing` | Admin/staff is preparing items for dispatch |
-| `shipped` | Order handed to logistics carrier |
-| `delivered` | Order successfully delivered to recipient |
-| `cancelled` | Order cancelled; stock automatically restored to inventory |
+| Status       | Description                                                                |
+| :----------- | :------------------------------------------------------------------------- |
+| `pending`    | Order placed, stock reserved, awaiting payment (Default on order creation) |
+| `paid`       | Customer completed payment                                                 |
+| `processing` | Admin/staff is preparing items for dispatch                                |
+| `shipped`    | Order handed to logistics carrier                                          |
+| `delivered`  | Order successfully delivered to recipient                                  |
+| `cancelled`  | Order cancelled; stock automatically restored to inventory                 |
 
 ### Status Transition Flow & Permissions Matrix
 
@@ -476,14 +484,14 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
    └───────────┴──────────────────────────────→ cancelled
 ```
 
-| From Status \ To Status | `paid` | `processing` | `shipped` | `delivered` | `cancelled` |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **`pending`** | ✅ *(Customer/Admin)* | ❌ | ❌ | ❌ | ✅ *(Customer/Admin)* |
-| **`paid`** | ❌ | ✅ *(Admin)* | ❌ | ❌ | ✅ *(Customer/Admin)* |
-| **`processing`** | ❌ | ❌ | ✅ *(Admin)* | ❌ | ❌ |
-| **`shipped`** | ❌ | ❌ | ❌ | ✅ *(Admin)* | ❌ |
-| **`delivered`** | — | — | — | — | — *(Terminal state)* |
-| **`cancelled`** | — | — | — | — | — *(Terminal state)* |
+| From Status \ To Status |        `paid`         | `processing` |  `shipped`   | `delivered`  |      `cancelled`      |
+| :---------------------- | :-------------------: | :----------: | :----------: | :----------: | :-------------------: |
+| **`pending`**           | ✅ _(Customer/Admin)_ |      ❌      |      ❌      |      ❌      | ✅ _(Customer/Admin)_ |
+| **`paid`**              |          ❌           | ✅ _(Admin)_ |      ❌      |      ❌      | ✅ _(Customer/Admin)_ |
+| **`processing`**        |          ❌           |      ❌      | ✅ _(Admin)_ |      ❌      |          ❌           |
+| **`shipped`**           |          ❌           |      ❌      |      ❌      | ✅ _(Admin)_ |          ❌           |
+| **`delivered`**         |           —           |      —       |      —       |      —       | — _(Terminal state)_  |
+| **`cancelled`**         |           —           |      —       |      —       |      —       | — _(Terminal state)_  |
 
 #### Stock Side-Effects & Soft-Cancel Rules
 
@@ -574,7 +582,6 @@ Client HTTP Request
    - `product_validators.py`: Ensures categories are active upon product assignment, and determines soft-delete vs hard-delete based on order history.
    - `order_validators.py`: Performs row-level pessimistic locking (`with_for_update()`), checks stock levels, validates allowed status transitions, and enforces cancellation rules.
 
-
 ---
 
 ### 📝 `PUT` Convention: Flexible Partial Updates
@@ -582,6 +589,7 @@ Client HTTP Request
 `PUT /products/<id>` and `PUT /categories/<id>` support flexible **partial updates**. Clients can provide either a full body or only the specific attributes they wish to modify (e.g. updating `stock` only). Unprovided fields and images are preserved as-is.
 
 #### Example: `PUT /products/<id>` (Partial Update: Stock Only)
+
 ```json
 {
   "stock": 50
@@ -589,12 +597,13 @@ Client HTTP Request
 ```
 
 #### Example: `PUT /products/<id>` (Full Body Payload)
+
 ```json
 {
   "category_id": 1,
   "name": "AIRism Cotton Oversized Crew Neck T-Shirt",
   "description": "Upgraded AIRism cotton blend with relaxed silhouette and moisture-wicking technology.",
-  "price": 19.90,
+  "price": 19.9,
   "stock": 150,
   "size": "L",
   "color": "Navy",
@@ -618,13 +627,14 @@ Client HTTP Request
 #### 1. Authentication & User Management
 
 ##### `POST /auth/login`
+
 - **Auth**: None
 - **Description**: Authenticate user credentials and receive a JWT Bearer token.
 - **Request Body Payload**:
   | Field | Type | Required | Validation / Options |
   | :--- | :--- | :---: | :--- |
   | `username` | String | Optional* | Account username (*Must provide either `username` or `email`) |
-  | `email` | String | Optional* | Valid email format |
+  | `email` | String | Optional\* | Valid email format |
   | `password` | String | **Required** | Plain-text account password, non-blank |
 - **Success Response (`200 OK`)**:
   ```json
@@ -653,6 +663,7 @@ Client HTTP Request
 ---
 
 ##### `POST /users`
+
 - **Auth**: None
 - **Description**: Register a new user account. All public registrations default to the `customer` role. Role assignment is a privileged admin operation and cannot be set through this endpoint.
 - **Request Body Payload**:
@@ -672,6 +683,7 @@ Client HTTP Request
 ---
 
 ##### `GET /users`
+
 - **Auth**: JWT Required (`Authorization: Bearer <token>`)
 - **Permissions**: **Superadmin only** (`@roles_required('superadmin')`).
 - **Description**: Retrieve a list of registered user accounts with support for role filtering, active status filtering, search across username/email, and pagination.
@@ -707,6 +719,7 @@ Client HTTP Request
 ---
 
 ##### `GET /users/<id>`
+
 - **Auth**: JWT Required (`Authorization: Bearer <token>`)
 - **Permissions**: Customers can access **only their own** profile (`user_id == id`). Admins and superadmins can view any profile.
 - **Success Response (`200 OK`)**: Returns user profile details.
@@ -720,6 +733,7 @@ Client HTTP Request
 ---
 
 ##### `PUT /users/<id>`
+
 - **Auth**: JWT Required (`Authorization: Bearer <token>`)
 - **Permissions**:
   - **Customers**: Can update **only their own profile** (`user_id == id`) and modify only `username` and `email`.
@@ -744,13 +758,12 @@ Client HTTP Request
   | `409 Conflict` | `USER_EMAIL_CONFLICT` | Updated email is already taken by another user |
   | `422 Unprocessable Entity` | `VALIDATION_ERROR` | Empty request payload or field validation failure |
 
-
 ---
 
 #### 2. Products Catalog
 
-
 ##### `GET /products`
+
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve clothing products with pagination, sorting, and fashion attribute filters.
   - **Customers**: Strictly see **only active products** (`is_active = true`) belonging to active (or uncategorized) categories.
@@ -803,6 +816,7 @@ Client HTTP Request
 ---
 
 ##### `GET /products/<id>`
+
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve a single product by ID along with its complete image gallery.
   - **Customers**: Can only access active products (returns `404 PRODUCT_NOT_FOUND` if product is inactive).
@@ -812,6 +826,7 @@ Client HTTP Request
 ---
 
 ##### `POST /products`
+
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Create a new clothing product.
 - **Request Body Payload**:
@@ -831,6 +846,7 @@ Client HTTP Request
 ---
 
 ##### `PUT /products/<id>`
+
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Update a product entity and optional image gallery (supports partial or full payload). Unprovided fields and images are preserved as-is.
 - **Request Payload**: Any subset of product fields (e.g. `{"stock": 50}` or `{"price": 29.90, "name": "New Name"}`). Minimum 1 field required. Empty body (`{}`) returns `422`.
@@ -838,6 +854,7 @@ Client HTTP Request
 ---
 
 ##### `DELETE /products/<id>`
+
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Delete a product based on order status policy:
   | Product Order History | Action Taken | Response Code | Description |
@@ -851,6 +868,7 @@ Client HTTP Request
 #### 3. Categories Management
 
 ##### `GET /categories`
+
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve clothing categories listed **alphabetically (A–Z) by name**.
   - **Customers**: Strictly see **only active categories** (`is_active = true`).
@@ -861,21 +879,25 @@ Client HTTP Request
   | `is_active` | String | `true`, `false` | **(Admin only)** Filter active/inactive categories |
 
 ##### `GET /categories/<id>`
+
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve a category by ID along with its associated products.
   - **Customers**: Can only access active categories, and associated `products` array only includes active items.
   - **Admins / Superadmins**: Can view any category regardless of active status, including all associated products.
 
 ##### `POST /categories`
+
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Request Payload**: `{"name": "Outerwear", "description": "Jackets & Coats", "is_active": true}`
 - **Validation**: `name` must be non-blank and unique. Returns `409 Conflict` if name already exists.
 
 ##### `PUT /categories/<id>`
+
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Validation**: `name` must be non-blank. Returns `409 Conflict` if new name already exists. Empty body (`{}`) returns `422`.
 
 ##### `DELETE /categories/<id>`
+
 - **Auth**: JWT Required (`superadmin`, `admin`)
 - **Description**: Delete a category. **Blocked with `409 Conflict`** if the category has active products linked to it. Reassign or deactivate those products first.
 
@@ -884,6 +906,7 @@ Client HTTP Request
 #### 4. Orders Lifecycle
 
 ##### `GET /orders`
+
 - **Auth**: JWT Required
 - **Permissions**: Customers receive **only their own** orders. Admins/superadmins view all system orders.
 - **Default Ordering**: Orders are always listed **newest first** (`created_at` descending).
@@ -903,12 +926,14 @@ Client HTTP Request
 ---
 
 ##### `GET /orders/<id>`
+
 - **Auth**: JWT Required
 - **Permissions**: Customers restricted to viewing their own orders. Returns full order detail including items snapshot array (`items`: `product_id`, `name`, `quantity`, `price_at_purchase`, `size`, `color`).
 
 ---
 
 ##### `POST /orders`
+
 - **Auth**: JWT Required (All authenticated users)
 - **Description**: Place a new order. Validates stock, decrements inventory, and records size/color variants (synced from product if not specified) and price snapshot. Shipping details are strictly required.
 - **Request Body Payload**:
@@ -943,6 +968,7 @@ Client HTTP Request
 ---
 
 ##### `PATCH /orders/<id>`
+
 - **Auth**: JWT Required
 - **Description**: Update order lifecycle status following state machine rules. Restores stock if status transitions to `cancelled`.
 - **Request Body Payload**:
@@ -955,6 +981,7 @@ Client HTTP Request
 ---
 
 ##### `DELETE /orders/<id>`
+
 - **Auth**: JWT Required
 - **Description**: Soft-cancel an order (`pending` or `paid`). Sets `status = 'cancelled'`, requires a `cancellation_reason` (via JSON body `{"cancellation_reason": "..."}` or query param), restores product stock balances, preserves audit history, and returns `200 OK`.
 
@@ -963,6 +990,7 @@ Client HTTP Request
 #### 5. System & Health Monitoring
 
 ##### `GET /`
+
 - **Auth**: None (Public)
 - **Description**: Returns basic service metadata, version, and online status.
 - **Response Payload (`200 OK`)**:
@@ -976,6 +1004,7 @@ Client HTTP Request
   ```
 
 ##### `GET /health`
+
 - **Auth**: None (Public)
 - **Description**: Database connectivity and service health check designed for deployment liveness and readiness probes (Render, Railway, Fly.io, Kubernetes, AWS).
 - **Response Payload (`200 OK` - Healthy)**:
@@ -1000,6 +1029,7 @@ Client HTTP Request
 ## Frontend Integration Guidelines
 
 ### 1. Authentication Flow & Headers
+
 1. Authenticate user via `POST /auth/login`.
 2. Extract `token` from `response.data.data.token`.
 3. Store token securely (e.g., HTTP-only cookie or memory).
@@ -1012,6 +1042,7 @@ Client HTTP Request
    ```
 
 ### 2. Rendering UI Select Controls (Enums)
+
 - **Clothing Sizes**: Populate dropdowns with `["XS", "S", "M", "L", "XL", "XXL", "FREE", "Free Size"]`.
 - **Gender Filter**: Populate tab filters with `["Men", "Women", "Unisex", "Kids"]`.
 - **Order Status Badges**: Map status strings to UI badge colors:
@@ -1023,6 +1054,7 @@ Client HTTP Request
   - `cancelled` ➔ Red / Gray
 
 ### 3. Product Base64 Image Handling
+
 - Primary images on catalog list (`GET /products`) are returned in `primary_image`.
 - Render base64 images directly in `<img>` tags:
   ```html
@@ -1060,7 +1092,9 @@ Client HTTP Request
 The repository includes a comprehensive load testing suite implemented with **Locust** (`locustfile.py`) to benchmark and stress-test the REST API under high concurrency.
 
 ### Sequential User Journey Architecture
+
 Each simulated customer executes a strict 4-step sequence using Locust's `SequentialTaskSet`:
+
 1. **`on_start` (Authentication)**: Authenticates via `POST /auth/login` (defaulting to seeded customer `alice_smith` or dynamic user registration fallback) and attaches the JWT Bearer Token to all subsequent requests.
 2. **Step 1 (`GET /products`)**: Fetches active product catalog (with pagination/filters) and picks a product variant dynamically.
 3. **Step 2 (`GET /products/:id`)**: Retrieves detailed product attributes and metadata.
@@ -1072,25 +1106,34 @@ Each simulated customer executes a strict 4-step sequence using Locust's `Sequen
 > 💡 **Environment Configuration**: `locustfile.py` automatically reads `LOCUST_HOST`, `LOCUST_USER_USERNAME`, and `LOCUST_USER_PASSWORD` from your `.env` file (with fallback to `http://127.0.0.1:5000` and `alice_smith`). You can simply run `locust` without needing to pass `--host` every time.
 
 #### 1. Start the Flask Backend Server
+
 In one terminal window, activate the virtual environment and start the server:
+
 ```bash
 source venv/bin/activate
 python run.py
 ```
-*(Server listens on `http://127.0.0.1:5000`)*
+
+_(Server listens on `http://127.0.0.1:5000`)_
 
 #### 2. Option A: Interactive Web UI Mode
+
 Start Locust and access the real-time analytics dashboard at `http://127.0.0.1:8089`:
+
 ```bash
 locust
 ```
-*(Or specify explicitly: `locust -f locustfile.py --host=http://127.0.0.1:5000`)*
+
+_(Or specify explicitly: `locust -f locustfile.py --host=http://127.0.0.1:5000`)_
+
 - **Host**: `http://127.0.0.1:5000` (pre-filled from `.env`)
 - **Number of users**: `200`
 - **Ramp-up (spawn rate)**: `10` users/second
 
 #### 3. Option B: Automated Headless Simulation (Gradual Ramp 50 to 200 Users)
+
 To run automated benchmarks with HTML and CSV reports generated upon completion:
+
 ```bash
 # Uses the built-in GradualRampLoadShape (50 -> 100 -> 200 users over 5 minutes)
 locust -f locustfile.py --host=http://127.0.0.1:5000 --headless --html locust_report.html --csv locust_stats
@@ -1100,7 +1143,7 @@ locust -f locustfile.py --host=http://127.0.0.1:5000 --headless -u 200 -r 10 --r
 ```
 
 ### Key Performance Metrics Tracked
+
 - **RPS (Requests Per Second)**: System throughput under peak user concurrency.
 - **Response Times (Median, 95th & 99th Percentile)**: Latency distribution for catalog browsing vs database write operations.
 - **Failures & Error Rate %**: Verification that order placement and database locking maintain integrity without unhandled 500 errors.
-
