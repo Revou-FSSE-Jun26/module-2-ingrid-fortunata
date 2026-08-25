@@ -19,7 +19,6 @@ INSERT INTO categories (name, description, is_active) VALUES
 INSERT INTO users (username, email, password_hash, role, is_active) VALUES
 ('superadmin_user', 'superadmin@revofashion.com', 'hashed_password_sa', 'superadmin', TRUE),
 ('admin_user', 'admin@revofashion.com', 'hashed_password_admin', 'admin', TRUE),
-('seller_user', 'seller@revofashion.com', 'hashed_password_seller', 'seller', TRUE),
 ('alice_smith', 'alice@example.com', 'hashed_password_alice', 'customer', TRUE),
 ('deactivated_user', 'deactivated@example.com', 'hashed_password_deactivated', 'customer', FALSE);
 
@@ -53,7 +52,7 @@ INSERT INTO products (category_id, name, description, price, stock, size, color,
 -- 4. Insert Orders
 -- Order 1: alice_smith buys AIRism T-Shirt (M/White) + EZY Ankle Pants (L/Dark Gray) = 14.90 + 39.90 = 54.80
 INSERT INTO orders (user_id, total_amount, status) VALUES
-(4, 54.80, 'pending');
+(3, 54.80, 'pending');
 
 -- 5. Insert Order Items (with size/color at purchase)
 INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase, size, color) VALUES
