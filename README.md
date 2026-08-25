@@ -746,7 +746,7 @@ Client HTTP Request
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve clothing products with pagination, sorting, and fashion attribute filters.
   - **Customers**: Strictly see **only active products** (`is_active = true`) belonging to active (or uncategorized) categories.
-  - **Admins / Sellers**: View all products by default (including inactive/retired items) and can filter by `is_active`.
+  - **Admins / Superadmins**: View all products by default (including inactive/retired items) and can filter by `is_active`.
   - **Default Ordering**: Products are listed **newest first** based on `updated_at` timestamp (so newly added or recently updated products surface at the top).
 - **Query Parameters**:
   | Parameter | Type | Options / Enums | Description |
@@ -798,7 +798,7 @@ Client HTTP Request
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve a single product by ID along with its complete image gallery.
   - **Customers**: Can only access active products (returns `404 PRODUCT_NOT_FOUND` if product is inactive).
-  - **Admins / Sellers**: Can view any product regardless of active status.
+  - **Admins / Superadmins**: Can view any product regardless of active status.
 - **Success Response (`200 OK`)**: Includes `images` array containing base64 images and `is_primary` flags.
 
 ---
@@ -846,7 +846,7 @@ Client HTTP Request
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve clothing categories listed **alphabetically (A–Z) by name**.
   - **Customers**: Strictly see **only active categories** (`is_active = true`).
-  - **Admins / Sellers**: View all categories by default and can filter with `?is_active=true|false`.
+  - **Admins / Superadmins**: View all categories by default and can filter with `?is_active=true|false`.
 - **Query Parameters**:
   | Parameter | Type | Options / Enums | Description |
   | :--- | :--- | :--- | :--- |
@@ -856,7 +856,7 @@ Client HTTP Request
 - **Auth**: Optional (JWT for admin features)
 - **Description**: Retrieve a category by ID along with its associated products.
   - **Customers**: Can only access active categories, and associated `products` array only includes active items.
-  - **Admins / Sellers**: Can view any category regardless of active status, including all associated products.
+  - **Admins / Superadmins**: Can view any category regardless of active status, including all associated products.
 
 ##### `POST /categories`
 - **Auth**: JWT Required (`superadmin`, `admin`)

@@ -82,7 +82,7 @@ Selain *Foreign Key*, setiap tabel dilengkapi dengan validasi di tingkat basis d
 ### 1. Tabel `users`
 - `username`: Harus unik (`UNIQUE`) dan minimal 3 karakter (`CHECK (length(username) >= 3)`).
 - `email`: Harus unik (`UNIQUE`) dan memiliki format email valid yang mengandung karakter `@` (`CHECK (email LIKE '%@%')`).
-- `role`: Role pengguna — `superadmin`, `admin`, `seller`, atau `customer`.
+- `role`: Role pengguna — `superadmin`, `admin`, atau `customer`.
 
 ### 2. Tabel `categories`
 - `name`: Harus unik (`UNIQUE`) agar tidak ada kategori ganda.
