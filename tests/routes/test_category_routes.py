@@ -35,10 +35,17 @@ def test_get_categories_list_happy(client):
 
 def test_get_categories_admin_filter(client, admin_headers):
     """Happy Path: Admin can query categories by is_active filter."""
-    response = client.get('/categories?is_active=true', headers=admin_headers)
-    assert response.status_code == 200
-    data = response.get_json()["data"]
-    assert isinstance(data, list)
+    response_true = client.get('/categories?is_active=true', headers=admin_headers)
+    assert response_true.status_code == 200
+    data_true = response_true.get_json()["data"]
+    assert isinstance(data_true, list)
+    assert all(c["is_active"] is True for c in data_true)
+
+    response_false = client.get('/categories?is_active=false', headers=admin_headers)
+    assert response_false.status_code == 200
+    data_false = response_false.get_json()["data"]
+    assert isinstance(data_false, list)
+    assert all(c["is_active"] is False for c in data_false)
 
 
 # ============================================================================

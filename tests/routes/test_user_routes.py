@@ -35,15 +35,49 @@ def test_register_user_duplicate_username_fails(client):
 
     response = client.post('/users', json=payload)
     assert response.status_code == 409
-
     data = response.get_json()
     assert data["error_code"] == "USER_NAME_CONFLICT"
+
+
+def test_register_user_duplicate_email_fails(client):
+    """Verify registering an existing email returns 409 Conflict."""
+    payload = {
+        "username": "new_unique_alice",
+        "email": "alice@example.com",
+        "password": "password123"
+    }
+
+    response = client.post('/users', json=payload)
+    assert response.status_code == 409
+    data = response.get_json()
+    assert data["error_code"] == "USER_EMAIL_CONFLICT"
 
 
 def test_get_user_by_id_unauthorized(client):
     """Verify accessing /users/<id> without JWT returns 401 Unauthorized."""
     response = client.get('/users/1')
     assert response.status_code == 401
+
+
+def test_get_user_by_id_not_found(client, superadmin_headers):
+    """Verify accessing non-existent user returns 404."""
+    response = client.get('/users/99999', headers=superadmin_headers)
+    assert response.status_code == 404
+    assert response.get_json()["error_code"] == "USER_NOT_FOUND"
+
+
+def test_get_user_by_id_admin_access(client, admin_headers):
+    """Verify admin can view another user's profile (ID 3 - Alice)."""
+    response = client.get('/users/3', headers=admin_headers)
+    assert response.status_code == 200
+    assert response.get_json()["data"]["username"] == "alice_smith"
+
+
+def test_get_user_by_id_customer_forbidden_other_profile(client, customer_headers):
+    """Verify customer cannot view another user's profile (ID 1)."""
+    response = client.get('/users/1', headers=customer_headers)
+    assert response.status_code == 403
+    assert response.get_json()["error_code"] == "USER_FORBIDDEN"
 
 
 def test_get_user_by_id_authorized(client, customer_headers):
@@ -282,4 +316,22 @@ def test_get_all_users_pagination(client, superadmin_headers):
 
     data = response.get_json()["data"]
     assert len(data) <= 2
+
+
+def test_get_all_users_filter_is_active_true(client, superadmin_headers):
+    """GET /users?is_active=true filters active users."""
+    response = client.get('/users?is_active=true', headers=superadmin_headers)
+    assert response.status_code == 200
+    assert all(u["is_active"] is True for u in response.get_json()["data"])
+
+
+def test_user_routes_ghost_user(client, app):
+    """Verify accessing user routes with token of non-existent user returns 401."""
+    from flask_jwt_extended import create_access_token
+    with app.app_context():
+        token = create_access_token(identity="99999")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get('/users/1', headers=headers).status_code == 401
+    assert client.put('/users/1', json={"username": "new"}, headers=headers).status_code == 401
 

@@ -65,3 +65,28 @@ def test_order_cancellation_validator():
     assert validate_order_cancellation("shipped") is not None
     assert validate_order_cancellation("delivered") is not None
     assert validate_order_cancellation("cancelled") is not None
+
+
+def test_validate_and_lock_order_items_branches(app):
+    """Test price, stock, and existence checks in validate_and_lock_order_items."""
+    from app.validators.order_validators import validate_and_lock_order_items
+    from app.models.product import Product
+    from app.extensions import db
+
+    with app.app_context():
+        # 1. Product not found
+        _, _, err_nf = validate_and_lock_order_items([{"product_id": 99999, "quantity": 1}])
+        assert err_nf is not None
+
+        # 2. Product invalid price (<= 0)
+        bad_price_prod = Product(name="Zero Price Item", price=0.0, stock=10, color="Red", sku="SKU-ZERO-PRICE", is_active=True)
+        db.session.add(bad_price_prod)
+        db.session.commit()
+
+        _, _, err_price = validate_and_lock_order_items([{"product_id": bad_price_prod.id, "quantity": 1}])
+        assert err_price is not None
+        assert err_price[1] == 400
+
+        # Clean up
+        db.session.delete(bad_price_prod)
+        db.session.commit()

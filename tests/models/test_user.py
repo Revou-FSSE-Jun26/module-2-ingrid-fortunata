@@ -1,5 +1,6 @@
 """Unit tests for the User model."""
 
+from unittest.mock import patch
 import pytest
 from app.models.user import User
 
@@ -43,3 +44,22 @@ def test_user_to_dict_method(app):
     # Ensure sensitive fields like password_hash are NEVER exposed in to_dict()
     assert "password_hash" not in user_dict
     assert "password" not in user_dict
+
+
+def test_user_password_methods():
+    """Test set_password and check_password with hashed and plaintext fallback."""
+    user = User(username="hash_user", email="hash@example.com")
+    user.set_password("mypassword123")
+
+    assert user.check_password("mypassword123") is True
+    assert user.check_password("wrongpassword") is False
+
+    # Plaintext fallback check
+    user_plain = User(username="plain_user", email="plain@example.com", password_hash="plaintext_pass")
+    assert user_plain.check_password("plaintext_pass") is True
+    assert user_plain.check_password("other") is False
+
+    # Malformed hash ValueError fallback
+    with patch("app.models.user.check_password_hash", side_effect=ValueError("bad")):
+        user_bad = User(username="bad", email="bad@example.com", password_hash="pbkdf2:hash")
+        assert user_bad.check_password("anything") is False

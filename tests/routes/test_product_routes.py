@@ -39,13 +39,31 @@ def test_get_products_admin_filter_inactive(client, admin_headers):
     assert all(p["is_active"] is False for p in data)
 
 
-def test_get_products_filters(client):
-    """Verify filtering products by gender, category_id, color, price range, and search."""
+def test_get_products_filters(client, admin_headers):
+    """Verify filtering products by gender, size, color, material, category_id, price range, and search."""
     # Filter by gender
     res_gender = client.get('/products?gender=Men')
     assert res_gender.status_code == 200
     for p in res_gender.get_json()["data"]:
         assert p["gender"] in ["Men", "Unisex"]
+
+    # Filter by size
+    res_size = client.get('/products?size=M')
+    assert res_size.status_code == 200
+    for p in res_size.get_json()["data"]:
+        assert p["size"] == "M"
+
+    # Filter by color
+    res_color = client.get('/products?color=White')
+    assert res_color.status_code == 200
+    for p in res_color.get_json()["data"]:
+        assert "White" in p["color"]
+
+    # Filter by material
+    res_mat = client.get('/products?material=Cotton')
+    assert res_mat.status_code == 200
+    for p in res_mat.get_json()["data"]:
+        assert "Cotton" in p["material"]
 
     # Filter by category_id
     res_cat = client.get('/products?category_id=1')
@@ -66,15 +84,36 @@ def test_get_products_filters(client):
     for p in res_price.get_json()["data"]:
         assert 10 <= p["price"] <= 20
 
+    # Admin filter is_active=true
+    res_act = client.get('/products?is_active=true', headers=admin_headers)
+    assert res_act.status_code == 200
+    assert all(p["is_active"] is True for p in res_act.get_json()["data"])
+
 
 def test_get_products_sorting_and_pagination(client):
-    """Verify sorting and pagination on GET /products."""
+    """Verify sorting (all options) and pagination on GET /products."""
     # Sort by price ascending
-    res_sort = client.get('/products?sort_by=price_asc')
-    assert res_sort.status_code == 200
-    data = res_sort.get_json()["data"]
-    prices = [p["price"] for p in data]
-    assert prices == sorted(prices)
+    res_asc = client.get('/products?sort_by=price_asc')
+    assert res_asc.status_code == 200
+    prices_asc = [p["price"] for p in res_asc.get_json()["data"]]
+    assert prices_asc == sorted(prices_asc)
+
+    # Sort by price descending
+    res_desc = client.get('/products?sort_by=price_desc')
+    assert res_desc.status_code == 200
+    prices_desc = [p["price"] for p in res_desc.get_json()["data"]]
+    assert prices_desc == sorted(prices_desc, reverse=True)
+
+    # Sort by name ascending and descending
+    res_name_asc = client.get('/products?sort_by=name_asc')
+    assert res_name_asc.status_code == 200
+
+    res_name_desc = client.get('/products?sort_by=name_desc')
+    assert res_name_desc.status_code == 200
+
+    # Sort by oldest
+    res_oldest = client.get('/products?sort_by=oldest')
+    assert res_oldest.status_code == 200
 
     # Pagination
     res_page = client.get('/products?page=1&per_page=3')
@@ -336,6 +375,56 @@ def test_delete_product_hard_delete_success(client, admin_headers):
     # Verify 404 on GET
     get_res = client.get(f'/products/{prod_id}', headers=admin_headers)
     assert get_res.status_code == 404
+
+
+def test_admin_update_product_invalid_category(client, admin_headers):
+    """Verify updating product with non-existent category returns 404."""
+    res = client.put('/products/1', json={"category_id": 99999}, headers=admin_headers)
+    assert res.status_code == 404
+
+
+def test_admin_create_product_image_default_primary(client, admin_headers):
+    """Verify creating product with image without explicit is_primary sets first image as primary."""
+    res = client.post('/products', json={
+        "name": "Auto Primary Image Item",
+        "price": 20.0,
+        "stock": 5,
+        "color": "Blue",
+        "images": [{"image_base64": "data:image/png;base64,AUTOPRIMARY"}]
+    }, headers=admin_headers)
+    assert res.status_code == 201
+    prod_data = res.get_json()["data"]
+    assert prod_data["images"][0]["is_primary"] is True
+
+    client.delete(f'/products/{prod_data["id"]}', headers=admin_headers)
+
+
+def test_delete_product_soft_delete_when_ordered_history(client, admin_headers, customer_headers):
+    """Verify product in only cancelled/delivered order is soft-deleted with 204."""
+    # 1. Create product
+    prod_res = client.post('/products', json={
+        "name": "Soft Delete Target", "price": 10.0, "stock": 5, "color": "Navy"
+    }, headers=admin_headers)
+    prod_id = prod_res.get_json()["data"]["id"]
+
+    # 2. Place and cancel order
+    order_res = client.post('/orders', json={
+        "shipping_address": "123 Marina Bay", "recipient_name": "Alice", "recipient_phone": "+6591234567",
+        "items": [{"product_id": prod_id, "quantity": 1}]
+    }, headers=customer_headers)
+    order_id = order_res.get_json()["data"]["id"]
+
+    client.delete(f'/orders/{order_id}', json={"cancellation_reason": "Cancel to test soft delete"}, headers=customer_headers)
+
+    # 3. Delete product -> soft deleted (204)
+    del_res = client.delete(f'/products/{prod_id}', headers=admin_headers)
+    assert del_res.status_code == 204
+
+    # 4. Inactive for public (404), active=false for admin (200)
+    assert client.get(f'/products/{prod_id}').status_code == 404
+    admin_get = client.get(f'/products/{prod_id}', headers=admin_headers)
+    assert admin_get.status_code == 200
+    assert admin_get.get_json()["data"]["is_active"] is False
 
 
 def test_delete_product_unauthorized(client):
