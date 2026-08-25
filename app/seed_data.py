@@ -6,8 +6,9 @@ from app.models.product import Product
 from app.models.order import Order, order_items
 from werkzeug.security import generate_password_hash
 
-def seed_database():
-    app = create_app()
+def seed_database(app=None):
+    if app is None:
+        app = create_app()
     with app.app_context():
         print("Seeding fashion store data for RevoFashion...")
 

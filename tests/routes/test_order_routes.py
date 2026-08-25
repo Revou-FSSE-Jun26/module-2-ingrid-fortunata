@@ -47,7 +47,28 @@ def test_get_orders_as_admin_sees_all(client, admin_headers):
 
 
 def test_get_orders_filters_and_pagination(client, admin_headers):
-    """Verify order search and pagination."""
+    """Verify order search, categorized filters, and pagination."""
+    # Filter by order_id
+    res_oid = client.get('/orders?order_id=1', headers=admin_headers)
+    assert res_oid.status_code == 200
+    assert len(res_oid.get_json()["data"]) == 1
+
+    # Filter by recipient_name
+    res_rname = client.get('/orders?recipient_name=Alice', headers=admin_headers)
+    assert res_rname.status_code == 200
+
+    # Filter by recipient_phone
+    res_phone = client.get('/orders?recipient_phone=9123', headers=admin_headers)
+    assert res_phone.status_code == 200
+
+    # Filter by shipping_address
+    res_addr = client.get('/orders?shipping_address=Marina', headers=admin_headers)
+    assert res_addr.status_code == 200
+
+    # Filter by customer_name
+    res_cust = client.get('/orders?customer_name=alice', headers=admin_headers)
+    assert res_cust.status_code == 200
+
     # Search by recipient name
     res_search = client.get('/orders?search=Alice', headers=admin_headers)
     assert res_search.status_code == 200
@@ -318,7 +339,7 @@ def test_customer_forbidden_restricted_status_transition(client, customer_header
         "status": "processing"
     }, headers=customer_headers)
     assert res.status_code == 403
-    assert res.get_json()["error_code"] == "FORBIDDEN"
+    assert res.get_json()["error_code"] == "ORDER_FORBIDDEN_TRANSITION"
 
 
 def test_invalid_status_transition_conflict(client, admin_headers, customer_headers):
@@ -405,3 +426,26 @@ def test_delete_order_unauthorized(client):
     """Verify DELETE /orders/<id> without JWT returns 401."""
     response = client.delete('/orders/1')
     assert response.status_code == 401
+
+
+def test_order_patch_and_delete_not_found(client, admin_headers):
+    """Verify patching or deleting non-existent order returns 404."""
+    assert client.patch('/orders/99999', json={"status": "paid"}, headers=admin_headers).status_code == 404
+    assert client.delete('/orders/99999', json={"cancellation_reason": "Cancel non-existent"}, headers=admin_headers).status_code == 404
+
+
+def test_order_endpoints_ghost_user(client, app):
+    """Verify accessing order endpoints with a token for a non-existent user returns 401."""
+    from flask_jwt_extended import create_access_token
+    with app.app_context():
+        token = create_access_token(identity="99999")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get('/orders', headers=headers).status_code == 401
+    assert client.post('/orders', json={
+        "shipping_address": "123 Orchard", "recipient_name": "Ghost", "recipient_phone": "+6591234567",
+        "items": [{"product_id": 1, "quantity": 1}]
+    }, headers=headers).status_code == 401
+    assert client.get('/orders/1', headers=headers).status_code == 401
+    assert client.patch('/orders/1', json={"status": "paid"}, headers=headers).status_code == 401
+    assert client.delete('/orders/1', json={"cancellation_reason": "Ghost cancel"}, headers=headers).status_code == 401

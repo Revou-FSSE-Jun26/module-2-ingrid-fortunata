@@ -40,6 +40,13 @@ env/
 *~
 .DS_Store
 
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
 # Superpowers / Internal Planning Docs
 .superpowers/
 docs/superpowers/

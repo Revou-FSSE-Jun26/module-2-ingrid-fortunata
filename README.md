@@ -141,33 +141,34 @@ Open your browser to test endpoints interactively:
 
 ---
 
-#### Step 8: Run Automated Test Suite (Pytest)
+#### Step 8: Run Automated Test Suite & Coverage (Pytest)
 
-The project includes a comprehensive, modular `pytest` suite organized into models, schemas, routes, and testing feature demos.
+The project includes a comprehensive, modular `pytest` test suite (190 test cases, **100% code coverage**) configured with in-memory SQLite (`sqlite:///:memory:`) for fast, isolated, and repeatable test runs without altering the local PostgreSQL database.
 
 ```bash
-# Run all tests
-pytest tests/
+# Run all tests with terminal coverage summary
+pytest
 
-# Run with verbose output (shows individual test names and status)
-pytest tests/ -v
+# Run with verbose test-by-test breakdown
+pytest -v
 
 # Run a specific test directory or file
 pytest tests/models/                 # Unit tests for SQLAlchemy models
 pytest tests/schemas/                # Marshmallow schema & validator tests
-pytest tests/routes/                 # Endpoint integration tests
+pytest tests/routes/                 # Endpoint integration tests (GET, POST, PUT, PATCH, DELETE)
 pytest tests/test_domain_validators.py -v # Unit tests for reusable business logic validators
 pytest tests/test_demo_summary.py -v # Pytest features demo (match, raises, xfail)
+pytest tests/test_database_error_handling.py -v # Database exception & rollback verification
 
-# Run a specific test function by name/keyword
-pytest tests/schemas/test_validators.py -k "test_not_blank" -v
+# Generate detailed HTML test coverage report (output in htmlcov/index.html)
+pytest --cov=app --cov-report=html
 ```
 
 ##### 📊 Understanding Pytest Output & Test Summary
 * **`PASSED`** (Green): All assertions inside the test passed.
 * **`FAILED`** (Red): An assertion or error condition failed (shows readable visual diffs).
 * **`XFAIL`** (Yellow): Expected failure marked via `@pytest.mark.xfail` (does not break CI build).
-* **Summary Bar**: Displays the overall execution time and total counts (e.g., `83 passed, 1 xfailed in 3.03s`).
+* **Summary Bar**: Displays the overall execution time and total counts (e.g., `189 passed, 1 xfailed in 16.43s`).
 
 ---
 
@@ -227,6 +228,8 @@ JOIN products p ON oi.product_id = p.id;
 | **Flask-Smorest** | 0.47.0 | OpenAPI 3.0 specification & Swagger UI generation |
 | **Flask-JWT-Extended** | 4.6.0 | Stateless JSON Web Token authentication |
 | **marshmallow** | 4.3.1 | Input validation & serialization schemas |
+| **pytest** | 9.1.1 | Automated testing framework |
+| **pytest-cov** | 7.1.0 | Code coverage measurement & reporting |
 | **Werkzeug** | 3.1.8 | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
 | **psycopg2-binary** | 2.9.12 | PostgreSQL database driver |
 | **python-dotenv** | 1.0.1 | Local environment configuration management |
@@ -240,7 +243,7 @@ module-2-ingrid-fortunata/
 │   ├── auth.py               # @roles_required() decorator for RBAC
 │   ├── config.py             # Config class (DATABASE_URL, JWT, OpenAPI settings)
 │   ├── errors.py             # Standard error response constructors & HTTP error helpers
-│   ├── extensions.py         # Extension instances (db, migrate, api, jwt)
+│   ├── extensions.py         # Extension instances (db, migrate, api, jwt, cors)
 │   ├── models/               # SQLAlchemy ORM Models
 │   │   ├── __init__.py       # Model exports for migration discovery
 │   │   ├── user.py           # User model
@@ -268,13 +271,18 @@ module-2-ingrid-fortunata/
 │   │   └── pagination.py     # Centralized query pagination parameter parsing
 │   └── seed_data.py          # Database seeding script (categories, products, users, orders)
 ├── migrations/               # Alembic database migration history
-├── tests/                    # Modular Pytest Suite (84 tests)
-│   ├── conftest.py           # Shared fixtures (app, client, auth headers)
+├── tests/                    # Modular Pytest Suite (190 tests, 100% coverage)
+│   ├── conftest.py           # In-memory SQLite fixtures & auth header helpers
 │   ├── test_demo_summary.py  # Pytest demo (exceptions, match, xfail, summary)
 │   ├── test_domain_validators.py # Unit tests for domain validator functions & error helpers
+│   ├── test_app_error_handlers.py # Global HTTP error & JWT handlers
+│   ├── test_auth_helpers.py  # Authentication & RBAC unit tests
+│   ├── test_config.py        # Application configuration tests
+│   ├── test_database_error_handling.py # Database exception & rollback verification
+│   ├── test_seed_data.py     # Database seeder execution tests
 │   ├── models/               # Model unit tests (user, product, order)
 │   ├── schemas/              # Schema & validator tests (validation rules, errors)
-│   └── routes/               # Route integration tests (auth, users, products, orders)
+│   └── routes/               # Route integration tests (auth, users, categories, products, orders)
 ├── img/                      # ERD Diagram & media assets
 ├── queries/                  # SQL scripts for verification
 ├── .env.example              # Template for local environment variables

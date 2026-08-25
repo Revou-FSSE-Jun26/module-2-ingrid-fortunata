@@ -105,6 +105,7 @@ def app():
         yield flask_app        # run tests
         _db.session.remove()
         _db.drop_all()         # clean up tables after all module tests finish
+        _db.engine.dispose()
 
 
 @pytest.fixture(scope='module')

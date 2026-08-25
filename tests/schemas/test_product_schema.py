@@ -4,8 +4,16 @@ import pytest
 from marshmallow import ValidationError
 from app.schemas.product import (
     ProductCreateInputSchema,
-    ProductImageInputSchema
+    ProductUpdateInputSchema,
+    ProductImageInputSchema,
+    not_blank
 )
+
+
+def test_product_not_blank_validator():
+    """Verify not_blank rejects empty strings."""
+    with pytest.raises(ValidationError):
+        not_blank("   ")
 
 
 def test_product_create_schema_valid_payload():
@@ -87,6 +95,55 @@ def test_product_create_schema_more_than_three_images_raises():
     errors = exc_info.value.messages
     assert "images" in errors
     assert "A product can have at most 3 images." in errors["images"]
+
+
+def test_product_create_schema_multiple_primaries_raises():
+    """Verify having more than 1 primary image raises ValidationError."""
+    schema = ProductCreateInputSchema()
+    payload = {
+        "name": "Multi Primary Shirt",
+        "price": 20.0,
+        "stock": 10,
+        "color": "White",
+        "images": [
+            {"image_base64": "img1", "is_primary": True},
+            {"image_base64": "img2", "is_primary": True}
+        ]
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        schema.load(payload)
+
+    assert "Exactly one image can be flagged as primary." in exc_info.value.messages["images"]
+
+
+def test_product_update_schema_validation_branches():
+    """Verify ProductUpdateInputSchema validation rules."""
+    schema = ProductUpdateInputSchema()
+
+    # Empty payload
+    with pytest.raises(ValidationError, match="At least one field must be provided"):
+        schema.load({})
+
+    # Negative price
+    with pytest.raises(ValidationError):
+        schema.load({"price": -5.0})
+
+    # Negative stock
+    with pytest.raises(ValidationError):
+        schema.load({"stock": -1})
+
+    # More than 3 images
+    with pytest.raises(ValidationError):
+        schema.load({"images": [{"image_base64": "1"}, {"image_base64": "2"}, {"image_base64": "3"}, {"image_base64": "4"}]})
+
+    # Multiple primaries
+    with pytest.raises(ValidationError):
+        schema.load({"images": [{"image_base64": "1", "is_primary": True}, {"image_base64": "2", "is_primary": True}]})
+
+    # Valid partial
+    res = schema.load({"name": "New Valid Name"})
+    assert res["name"] == "New Valid Name"
 
 
 def test_product_image_size_limit_raises():

@@ -97,7 +97,8 @@ def validate_order_status_transition(current_status: str, new_status: str, is_ad
         customer_allowed = CUSTOMER_ALLOWED_TRANSITIONS.get(current_status, [])
         if new_status not in customer_allowed:
             return forbidden_response(
-                f"Customers cannot change order status from '{current_status}' to '{new_status}'."
+                f"Customers cannot change order status from '{current_status}' to '{new_status}'.",
+                error_code="ORDER_FORBIDDEN_TRANSITION"
             )
 
     return None
