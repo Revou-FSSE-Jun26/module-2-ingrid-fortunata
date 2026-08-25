@@ -63,7 +63,7 @@ def build_filtered_products_query(args: dict, is_admin: bool):
             (Category.id.is_(None)) | (Category.is_active.is_(True))
         )
     else:
-        # Admin / seller view: shows all by default, or filters by is_active query param
+        # Admin / superadmin view: shows all by default, or filters by is_active query param
         is_active_param = args.get('is_active')
         if is_active_param is not None:
             if is_active_param.lower() == 'true':

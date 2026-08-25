@@ -7,7 +7,21 @@ from app.extensions import db, migrate, api, jwt, cors
 
 def create_app(config_class=Config):
     flask_app = Flask(__name__)
-    flask_app.config.from_object(config_class)
+
+    if isinstance(config_class, dict):
+        flask_app.config.from_object(Config)
+        flask_app.config.update(config_class)
+    elif config_class is not None:
+        flask_app.config.from_object(config_class)
+
+    # SQLite compatibility: clean up pool options and ensure static pool for in-memory DB
+    db_uri = flask_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if db_uri.startswith('sqlite'):
+        from sqlalchemy.pool import StaticPool
+        flask_app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'poolclass': StaticPool,
+            'connect_args': {'check_same_thread': False}
+        }
 
     # Initialize extensions
     cors.init_app(
