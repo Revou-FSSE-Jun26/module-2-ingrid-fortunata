@@ -1,3 +1,4 @@
+import logging
 from flask_smorest import Blueprint
 from flask import jsonify, request
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
@@ -16,6 +17,8 @@ from app.schemas import (
 from app.errors import error_response, not_found_response, conflict_response
 from app.validators import validate_category_name_unique, validate_category_deletion
 
+logger = logging.getLogger(__name__)
+
 categories_bp = Blueprint('categories', __name__, description='Operations on categories')
 
 
@@ -27,20 +30,25 @@ def create_category(category_data):
     """Create a new category."""
     name = category_data.get('name', '').strip()
     category_data['name'] = name
+    logger.info("POST /categories — creating category '%s'", name)
 
     err = validate_category_name_unique(name)
     if err:
+        logger.warning("Create category failed — name conflict: '%s'", name)
         return err
 
     try:
         new_cat = Category(**category_data)
         db.session.add(new_cat)
         db.session.commit()
+        logger.info("Category created successfully — id=%d, name='%s'", new_cat.id, new_cat.name)
     except IntegrityError:
         db.session.rollback()
+        logger.warning("Create category failed on commit — IntegrityError for name '%s'", name)
         return conflict_response("CATEGORY_CONFLICT", "Category name already exists.")
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error creating category '%s': %s", name, e, exc_info=True)
         return error_response("CATEGORY_DATABASE_ERROR", "An error occurred while creating the category.", 500)
 
     return jsonify({
@@ -55,6 +63,7 @@ def get_categories():
     Customers see only active categories. Admins can see all or filter by ?is_active=true|false.
     """
     is_admin = is_admin_user()
+    logger.info("GET /categories — is_admin=%s", is_admin)
     query = Category.query
 
     if not is_admin:
@@ -69,6 +78,7 @@ def get_categories():
 
     # Listed alphabetically by name
     categories = query.order_by(Category.name.asc()).all()
+    logger.debug("Returning %d categories", len(categories))
     return jsonify({
         "data": [c.to_dict() for c in categories]
     }), 200
@@ -81,6 +91,7 @@ def get_category_by_id(id):
     Customers can only access active categories and active products.
     Admins can view any category along with all associated products.
     """
+    logger.info("GET /categories/%d", id)
     is_admin = is_admin_user()
     query = Category.query.options(selectinload(Category.products)).filter_by(id=id)
 
@@ -89,6 +100,7 @@ def get_category_by_id(id):
 
     category = query.first()
     if not category:
+        logger.warning("Category not found: id=%d (is_admin=%s)", id, is_admin)
         return not_found_response("Category", id)
 
     return jsonify({
@@ -104,8 +116,10 @@ def update_category(category_data, id):
     """Replace/update an entire category.
     Under RESTful PUT semantics, the client provides the full category representation to replace the existing resource.
     """
+    logger.info("PUT /categories/%d — updating category", id)
     category = db.session.get(Category, id)
     if not category:
+        logger.warning("Update category failed — Category not found: id=%d", id)
         return not_found_response("Category", id)
 
     name = category_data.get('name')
@@ -115,17 +129,21 @@ def update_category(category_data, id):
         if name != category.name:
             err = validate_category_name_unique(name, exclude_id=id)
             if err:
+                logger.warning("Update category failed — name conflict: '%s'", name)
                 return err
 
     try:
         for key, val in category_data.items():
             setattr(category, key, val)
         db.session.commit()
+        logger.info("Category updated successfully — id=%d, name='%s'", category.id, category.name)
     except IntegrityError:
         db.session.rollback()
+        logger.warning("Update category failed on commit — IntegrityError for name '%s'", name)
         return conflict_response("CATEGORY_CONFLICT", "Category name already exists.")
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error updating category id=%d: %s", id, e, exc_info=True)
         return error_response("CATEGORY_DATABASE_ERROR", "An error occurred while updating the category.", 500)
 
     return jsonify({
@@ -141,20 +159,26 @@ def delete_category(id):
     Products themselves are NOT deleted — they become uncategorized.
     To prevent this, the endpoint blocks deletion if the category has active products.
     """
+    logger.info("DELETE /categories/%d — deleting category", id)
     category = db.session.get(Category, id)
     if not category:
+        logger.warning("Delete category failed — Category not found: id=%d", id)
         return not_found_response("Category", id)
 
     # Block deletion if active products are linked to this category
     err = validate_category_deletion(id)
     if err:
+        logger.warning("Delete category blocked for id=%d", id)
         return err
 
     try:
         db.session.delete(category)
         db.session.commit()
-    except SQLAlchemyError:
+        logger.info("Category deleted successfully — id=%d", id)
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error deleting category id=%d: %s", id, e, exc_info=True)
         return error_response("CATEGORY_DATABASE_ERROR", "An error occurred while deleting the category.", 500)
 
     return '', 204
+

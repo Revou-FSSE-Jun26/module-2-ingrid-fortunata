@@ -44,3 +44,22 @@ class Config:
     OPENAPI_SWAGGER_UI_PATH = "/swagger-ui"
     OPENAPI_SWAGGER_UI_URL = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
 
+    # Logging configuration
+    FLASK_ENV = os.getenv('FLASK_ENV', 'local')
+    LOG_LEVEL = os.getenv('LOG_LEVEL', None)
+    LOG_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s'
+    LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+    LOG_LEVEL_MAP = {
+        'local': 'DEBUG',
+        'development': 'INFO',
+        'production': 'WARNING',
+    }
+
+    @classmethod
+    def get_log_level(cls):
+        """Priority: LOG_LEVEL env var > FLASK_ENV mapping > default DEBUG"""
+        if cls.LOG_LEVEL:
+            return cls.LOG_LEVEL.upper()
+        flask_env = os.getenv('FLASK_ENV', cls.FLASK_ENV)
+        return cls.LOG_LEVEL_MAP.get(flask_env, 'DEBUG')
+
