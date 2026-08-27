@@ -1,3 +1,4 @@
+import logging
 from flask_smorest import Blueprint
 from flask import jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
@@ -14,6 +15,8 @@ from app.schemas import (
     ProductUpdateInputSchema,
     ProductDetailResponseSchema,
 )
+
+logger = logging.getLogger(__name__)
 
 products_bp = Blueprint('products', __name__, description='Operations on products')
 
@@ -127,8 +130,12 @@ def get_all_products():
     Supports optional filters: ?gender=Women&size=M&color=Black
     Pagination: ?page=1&per_page=10 (max per_page=100)
     """
-    products_query = build_filtered_products_query(request.args, is_admin=is_admin_user())
+    is_admin = is_admin_user()
     page, per_page = get_page_params()
+    logger.info("GET /products — page=%s, per_page=%s, is_admin=%s", page, per_page, is_admin)
+    logger.debug("Request filters: %s", request.args.to_dict())
+
+    products_query = build_filtered_products_query(request.args, is_admin=is_admin)
 
     if page is not None:
         pagination = products_query.paginate(page=page, per_page=per_page, error_out=False)
@@ -138,6 +145,7 @@ def get_all_products():
             d['primary_image'] = primary_image
             data.append(d)
 
+        logger.debug("Returning %d products (total=%d, page %d of %d)", len(data), pagination.total, pagination.page, pagination.pages)
         return jsonify({
             "data": data,
             "page": pagination.page,
@@ -153,6 +161,7 @@ def get_all_products():
         d['primary_image'] = primary_image
         data.append(d)
 
+    logger.debug("Returning %d non-paginated products", len(data))
     return jsonify({"data": data}), 200
 
 
@@ -162,6 +171,7 @@ def get_product_by_id(id):
     """Retrieves a single product by ID.
     Customers can only view active products. Admins/superadmins can view any product.
     """
+    logger.info("GET /products/%d", id)
     is_admin = is_admin_user()
     query = Product.query.join(
         Category, Product.category_id == Category.id, isouter=True
@@ -175,6 +185,7 @@ def get_product_by_id(id):
 
     product = query.first()
     if not product:
+        logger.warning("Product not found: id=%d (is_admin=%s)", id, is_admin)
         return not_found_response("Product", id)
 
     return jsonify({"data": product.to_detail_dict()}), 200
@@ -186,10 +197,12 @@ def get_product_by_id(id):
 @products_bp.response(201, ProductDetailResponseSchema)
 def create_product(product_data):
     """Create a new product with up to 3 images."""
+    logger.info("POST /products — creating product '%s'", product_data.get('name'))
     images_data = product_data.pop('images', [])
 
     category, err = validate_product_category(product_data.get('category_id'))
     if err:
+        logger.warning("Create product failed — invalid category_id=%s", product_data.get('category_id'))
         return err
 
     if not product_data.get('sku'):
@@ -202,9 +215,11 @@ def create_product(product_data):
 
         save_product_images(new_product.id, images_data, replace=False)
         db.session.commit()
+        logger.info("Product created successfully — id=%d, sku='%s'", new_product.id, new_product.sku)
 
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error creating product '%s': %s", product_data.get('name'), e, exc_info=True)
         return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while creating the product.", 500)
 
     return jsonify({"data": new_product.to_detail_dict()}), 201
@@ -218,12 +233,15 @@ def update_product(product_data, id):
     """Update a product and its images (supports partial payload update).
     Only provided fields in the request body will be updated. Existing fields and images are preserved if omitted.
     """
+    logger.info("PUT /products/%d — updating product", id)
     product = db.session.get(Product, id)
     if not product:
+        logger.warning("Update product failed — Product not found: id=%d", id)
         return not_found_response("Product", id)
 
     category, err = validate_product_category(product_data.get('category_id'))
     if err:
+        logger.warning("Update product failed — invalid category_id=%s", product_data.get('category_id'))
         return err
 
     images_data = product_data.pop('images', None)
@@ -236,9 +254,11 @@ def update_product(product_data, id):
             save_product_images(id, images_data, replace=True)
 
         db.session.commit()
+        logger.info("Product updated successfully — id=%d", id)
 
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error updating product id=%d: %s", id, e, exc_info=True)
         return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while updating the product.", 500)
 
     return jsonify({"data": product.to_detail_dict()}), 200
@@ -252,23 +272,30 @@ def delete_product(id):
     - If linked ONLY to completed/cancelled orders ('delivered', 'cancelled'): soft-deleted (is_active = False) with 204.
     - If never ordered: hard-deleted with 204.
     """
+    logger.info("DELETE /products/%d — deleting product", id)
     product = db.session.get(Product, id)
     if not product:
+        logger.warning("Delete product failed — Product not found: id=%d", id)
         return not_found_response("Product", id)
 
     has_any_orders, err = validate_product_deletion(id)
     if err:
+        logger.warning("Delete product blocked for id=%d", id)
         return err
 
     try:
         if has_any_orders:
             product.is_active = False
             db.session.commit()
+            logger.info("Product soft-deleted (has historical orders) — id=%d", id)
         else:
             db.session.delete(product)
             db.session.commit()
-    except SQLAlchemyError:
+            logger.info("Product hard-deleted (no orders) — id=%d", id)
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error deleting product id=%d: %s", id, e, exc_info=True)
         return error_response("PRODUCT_DATABASE_ERROR", "An error occurred while deleting the product.", 500)
 
     return '', 204
+

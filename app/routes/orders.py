@@ -1,3 +1,4 @@
+import logging
 from flask_smorest import Blueprint
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required
@@ -24,6 +25,8 @@ from app.schemas import (
     OrderUpdateStatusSchema,
 )
 from app.utils.pagination import get_page_params
+
+logger = logging.getLogger(__name__)
 
 orders_bp = Blueprint('orders', __name__, description='Operations on orders')
 
@@ -93,11 +96,15 @@ def create_order(order_data):
     """Place a new order linked to the logged-in user."""
     user = get_current_user()
     if not user:
+        logger.warning("Order creation failed — unauthorized access")
         return unauthorized_response("Authenticated user not found.")
 
     items = order_data.get('items', [])
+    logger.info("POST /orders — user_id=%s checkout %d items", user.id, len(items))
+
     product_updates, total_amount, err = validate_and_lock_order_items(items)
     if err:
+        logger.warning("Order placement validation failed for user_id=%s", user.id)
         return err
 
     try:
@@ -124,9 +131,11 @@ def create_order(order_data):
             db.session.execute(stmt)
 
         db.session.commit()
+        logger.info("Order placed successfully — order_id=%d, user_id=%d, total=%.2f", new_order.id, user.id, new_order.total_amount)
 
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error creating order for user_id=%s: %s", user.id, e, exc_info=True)
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while placing the order.", 500)
 
     return jsonify({"data": new_order.to_detail_dict()}), 201
@@ -142,13 +151,18 @@ def get_orders():
     """
     user = get_current_user()
     if not user:
+        logger.warning("GET /orders failed — unauthorized")
         return unauthorized_response("Authenticated user not found.")
+
+    is_admin = user.role in ['superadmin', 'admin']
+    logger.info("GET /orders — user_id=%s, is_admin=%s", user.id, is_admin)
 
     query = build_filtered_orders_query(user, request.args)
     page, per_page = get_page_params()
 
     if page is not None:
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        logger.debug("Returning %d paginated orders for user_id=%s", len(pagination.items), user.id)
         return jsonify({
             "data": [o.to_dict() for o in pagination.items],
             "page": pagination.page,
@@ -158,6 +172,7 @@ def get_orders():
         }), 200
 
     orders = query.all()
+    logger.debug("Returning %d orders for user_id=%s", len(orders), user.id)
     return jsonify({
         "data": [o.to_dict() for o in orders]
     }), 200
@@ -172,9 +187,11 @@ def get_order_by_id(id):
     if not user:
         return unauthorized_response("Authenticated user not found.")
 
+    logger.info("GET /orders/%d — requested by user_id=%s", id, user.id)
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user.id):
+        logger.warning("Order not found or access forbidden: id=%d, user_id=%s", id, user.id)
         return not_found_response("Order", id)
 
     return jsonify({"data": order.to_detail_dict()}), 200
@@ -199,13 +216,16 @@ def update_order_status(update_data, id):
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user.id):
+        logger.warning("Update status failed — Order not found: id=%d, user_id=%s", id, user.id)
         return not_found_response("Order", id)
 
     new_status = update_data['status']
     current_status = order.status
+    logger.info("PATCH /orders/%d — status transition '%s' -> '%s' (user_id=%s, is_admin=%s)", id, current_status, new_status, user.id, is_admin)
 
     err = validate_order_status_transition(current_status, new_status, is_admin)
     if err:
+        logger.warning("Invalid status transition for order_id=%d: '%s' -> '%s'", id, current_status, new_status)
         return err
 
     try:
@@ -224,8 +244,10 @@ def update_order_status(update_data, id):
 
         order.status = new_status
         db.session.commit()
-    except SQLAlchemyError:
+        logger.info("Order status updated successfully — order_id=%d, new_status='%s'", id, new_status)
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error updating status for order_id=%d: %s", id, e, exc_info=True)
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while updating the order status.", 500)
 
     return jsonify({"data": order.to_detail_dict()}), 200
@@ -245,18 +267,22 @@ def delete_order(id):
     if not user:
         return unauthorized_response("Authenticated user not found.")
 
+    logger.info("DELETE /orders/%d — cancellation requested by user_id=%s", id, user.id)
     order = db.session.get(Order, id)
     is_admin = user.role in ['superadmin', 'admin']
     if not order or (not is_admin and order.user_id != user.id):
+        logger.warning("Cancel order failed — Order not found: id=%d, user_id=%s", id, user.id)
         return not_found_response("Order", id)
 
     err = validate_order_cancellation(order.status)
     if err:
+        logger.warning("Cancel order blocked for id=%d — current status '%s'", id, order.status)
         return err
 
     body = request.get_json(silent=True) or {}
     cancellation_reason = body.get('cancellation_reason') or request.args.get('cancellation_reason')
     if not cancellation_reason or not str(cancellation_reason).strip():
+        logger.warning("Cancel order failed — missing cancellation_reason for id=%d", id)
         return jsonify({
             "error_code": "VALIDATION_ERROR",
             "message": "cancellation_reason is required when cancelling an order.",
@@ -278,8 +304,11 @@ def delete_order(id):
         order.status = 'cancelled'
         order.cancellation_reason = str(cancellation_reason).strip()
         db.session.commit()
-    except SQLAlchemyError:
+        logger.info("Order cancelled successfully — id=%d", id)
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Error cancelling order id=%d: %s", id, e, exc_info=True)
         return error_response("ORDER_DATABASE_ERROR", "An error occurred while cancelling the order.", 500)
 
     return jsonify({"data": order.to_detail_dict()}), 200
+
