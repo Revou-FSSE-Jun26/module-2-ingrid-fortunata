@@ -21,6 +21,8 @@ All screenshots demonstrate real API execution against live endpoints using **Po
 | **Orders** | `GET` | `/orders/:id` | Retrieve order detail with price & item snapshots | `200 OK` | [View](#9-get-ordersid) |
 | **Orders** | `PATCH` | `/orders/:id` | Update order state (pending ➔ paid ➔ processing) | `200 OK` | [View](#10-patch-ordersid) |
 | **Orders** | `DELETE` | `/orders/:id` | Soft-cancel order & restore product stock | `200 OK` | [View](#11-delete-ordersid) |
+| **Testing** | `CLI` | `pytest` | Full automated test suite & 100% code coverage | `194 Passed` | [View](#5-automated-test-suite--coverage-pytest) |
+| **Load Test** | `CLI / Web` | `locust` | Concurrency & sequential customer journey testing | `200 OK / 0% Failures` | [View](#6-load--performance-testing-locust) |
 
 ---
 
@@ -125,3 +127,21 @@ All screenshots demonstrate real API execution against live endpoints using **Po
 ![Database Order Items Table](./img/db_order_items.png)
 
 *Figure: Production database view showing `order_items` junction table snapshotting `price_at_purchase`, `size`, `color`, and `quantity`.*
+
+---
+
+## 🧪 5. Automated Test Suite & Coverage (PyTest)
+
+- **Description**: Full automated unit and integration test suite executing 194 passing test cases and achieving 100% statement coverage across all domain layers (`routes`, `models`, `schemas`, `validators`, `utils`, `auth`).
+- **Command**: `pytest --cov=app --cov-report=term-missing`
+
+![PyTest Test Execution & Coverage Report](./img/checkpoint3/pytest.png)
+
+---
+
+## 🚀 6. Load & Performance Testing (Locust)
+
+- **Description**: Concurrency load test simulating realistic multi-step customer journeys (`GET /products` ➔ `GET /products/:id` ➔ `POST /orders` ➔ `GET /orders/:id`) with JWT authentication and real-time RPS/latency tracking.
+- **Web UI & Reports**: Real-time dashboard at `http://127.0.0.1:8089`
+
+![Locust Load Testing Dashboard](./img/checkpoint3/locust.png)
