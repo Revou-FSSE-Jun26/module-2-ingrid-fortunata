@@ -6,10 +6,17 @@ from app.models.product import Product
 from app.models.order import Order, order_items
 from werkzeug.security import generate_password_hash
 
-def seed_database(app=None):
+def seed_database(app=None, reset=False):
     if app is None:
         app = create_app()
     with app.app_context():
+        if reset:
+            print("Clearing and resetting database tables...")
+            db.session.remove()
+            db.drop_all()
+            db.create_all()
+            print("Database schema reset successfully.")
+
         print("Seeding fashion store data for RevoFashion...")
 
         # ─── 1. Categories (Uniqlo-inspired) ───
@@ -261,4 +268,6 @@ def seed_database(app=None):
         print("Fashion store seeding completed successfully! 🧥👗👖")
 
 if __name__ == '__main__':
-    seed_database()
+    import sys
+    reset_flag = '--reset' in sys.argv or '--clear' in sys.argv
+    seed_database(reset=reset_flag)

@@ -110,7 +110,11 @@ flask db upgrade
 Populate your database with Uniqlo-inspired fashion categories, clothing products, pre-configured role users, and sample orders:
 
 ```bash
+# Seed initial data (idempotent)
 PYTHONPATH=. python3 app/seed_data.py
+
+# Or completely wipe, reset auto-increments, and re-seed (useful after load testing)
+python3 -m app.seed_data --reset
 ```
 
 ##### Pre-Configured Seed Users for Testing
@@ -1174,6 +1178,24 @@ locust -f locustfile.py --host=http://127.0.0.1:5000 --headless -u 200 -r 10 --r
 - **RPS (Requests Per Second)**: System throughput under peak user concurrency.
 - **Response Times (Median, 95th & 99th Percentile)**: Latency distribution for catalog browsing vs database write operations.
 - **Failures & Error Rate %**: Verification that order placement and database locking maintain integrity without unhandled 500 errors.
+
+### Resetting the Database After Load Testing
+
+During load tests, Locust creates hundreds/thousands of test orders and depletes product inventory stock. To completely clear all test data, restore original inventory stock levels, and reset tables back to clean baseline seed data:
+
+```bash
+# Using module execution (Recommended)
+python3 -m app.seed_data --reset
+
+# Or using direct path execution
+PYTHONPATH=. python3 app/seed_data.py --reset
+```
+
+> 🔄 **What the reset command does**:
+> 1. Clears all test orders and order items.
+> 2. Restores all product inventory stock quantities back to their initial quantities.
+> 3. Cleans up dynamically generated test users while retaining the 4 default baseline accounts (`superadmin_user`, `admin_user`, `alice_smith`, `deactivated_user`).
+> 4. Restores the initial seed order (`Order #1`).
 
 ---
 
