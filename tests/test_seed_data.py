@@ -31,3 +31,12 @@ def test_seed_database_default_app(app):
     from unittest.mock import patch
     with patch("app.seed_data.create_app", return_value=app):
         seed_database(None)
+
+
+def test_seed_database_with_reset(app):
+    """Verify seed_database with reset=True cleanly resets and reseeds."""
+    seed_database(app, reset=True)
+    with app.app_context():
+        assert Category.query.count() >= 8
+        assert Product.query.count() >= 15
+        assert User.query.filter_by(username="alice_smith").first() is not None
