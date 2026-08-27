@@ -165,28 +165,36 @@ class CustomerUser(HttpUser):
         self.login_or_register()
 
     def login_or_register(self):
-        """Attempts to log in with default customer account or register dynamically."""
-        username = os.getenv("LOCUST_USER_USERNAME", "alice_smith")
-        password = os.getenv("LOCUST_USER_PASSWORD", "alice_password")
+        """
+        Authentication strategy:
+        1. If LOCUST_USER_USERNAME & LOCUST_USER_PASSWORD are set in .env:
+           Logs in with that single shared account.
+        2. If omitted/commented out in .env:
+           Dynamically registers a brand new unique user per virtual user (e.g. 50 distinct accounts for 50 users)
+           and authenticates immediately.
+        """
+        username = os.getenv("LOCUST_USER_USERNAME")
+        password = os.getenv("LOCUST_USER_PASSWORD")
 
-        # 1. Attempt Login
-        login_res = self.client.post(
-            "/auth/login",
-            json={"username": username, "password": password},
-            name="POST /auth/login"
-        )
+        # 1. Attempt Single-User Login if credentials are provided in .env
+        if username and password:
+            login_res = self.client.post(
+                "/auth/login",
+                json={"username": username, "password": password},
+                name="POST /auth/login"
+            )
 
-        if login_res.status_code == 200:
-            token = login_res.json().get("data", {}).get("token")
-            if token:
-                self.auth_headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
-                }
-                return
+            if login_res.status_code == 200:
+                token = login_res.json().get("data", {}).get("token")
+                if token:
+                    self.auth_headers = {
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    }
+                    return
 
-        # 2. Fallback: Register a new dedicated virtual user if default login fails
-        rand_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        # 2. Dynamic Unique Registration: creates a unique customer for every virtual user
+        rand_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
         new_username = f"locust_user_{rand_suffix}"
         new_email = f"{new_username}@locustloadtest.local"
         new_pass = "SecurePass123!"
@@ -194,7 +202,7 @@ class CustomerUser(HttpUser):
         reg_res = self.client.post(
             "/users",
             json={"username": new_username, "email": new_email, "password": new_pass},
-            name="POST /users (Registration Fallback)"
+            name="POST /users (Dynamic Registration)"
         )
 
         if reg_res.status_code == 201:
@@ -220,7 +228,14 @@ class GradualRampLoadShape(LoadTestShape):
     - Stage 4 (120 to 180s): Hold 100 users
     - Stage 5 (180 to 220s): Ramp to 200 users (spawn_rate=10)
     - Stage 6 (220 to 300s): Hold 200 users peak load
+
+    Toggleable via LOCUST_USE_LOAD_SHAPE in .env:
+    - If LOCUST_USE_LOAD_SHAPE=true: Predefined stages will run automatically.
+    - If LOCUST_USE_LOAD_SHAPE=false (default): Locust Web UI allows custom users/spawn rate.
     """
+
+    # If not explicitly enabled, mark as abstract so Locust Web UI allows manual user input
+    abstract = os.getenv("LOCUST_USE_LOAD_SHAPE", "false").lower() not in ("true", "1", "yes")
 
     stages = [
         {"duration": 30, "users": 50, "spawn_rate": 10},
