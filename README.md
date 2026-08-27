@@ -180,6 +180,25 @@ pytest --cov=app --cov-report=html
 
 ---
 
+#### Step 9: Run Code Quality, Security & Dependency Audits
+
+Run static code analysis, security linting, and dependency vulnerability scans across the codebase:
+
+```bash
+# 1. Bandit: Scan Python code for security vulnerabilities (hardcoded secrets, unsafe bindings)
+bandit -r app/ run.py
+
+# 2. Pylint: Check PEP 8 compliance, code smells, and quality score (out of 10)
+pylint app/ run.py --exit-zero
+
+# 3. Pip-Audit: Scan third-party dependencies for known CVE vulnerabilities
+pip-audit
+```
+
+> 📖 **Full Audit Guide**: For detailed explanations, configurations, export commands, and sample outputs, see the [**Code Quality, Security & Dependency Auditing**](#code-quality-security--dependency-auditing) section below.
+
+---
+
 #### SQL Database Verification Queries
 
 You can verify database seeding directly via `psql`:
@@ -217,6 +236,8 @@ JOIN products p ON oi.product_id = p.id;
 - ✅ **Order Lifecycle & State Machine**: Status transitions (`pending` → `paid` → `processing` → `shipped` → `delivered` or `cancelled`) with role enforcement.
 - ✅ **Automated Stock Control**: Stock is decremented on order placement and restored upon order cancellation.
 - ✅ **Soft-Cancel Order Deletion**: `DELETE /orders/<id>` performs a soft cancel (restores stock, sets status to `cancelled`, preserves audit row).
+- ✅ **Structured Logging & Daily Rotation**: Built-in dual logging (`StreamHandler` console + `TimedRotatingFileHandler` writing to `logs/app.log` with 7-day retention) and environment-aware log levels (`DEBUG` / `INFO` / `WARNING`).
+- ✅ **Code Quality, Security & Vulnerability Audits**: Fully verified with **Bandit** (AST security scan), **Pylint** (code cleanliness & style score), and **Pip-Audit** (CVE dependency checking).
 - ✅ **Consistent Error Responses**: All API errors — including schema validation failures (422), JWT issues, and server errors — return a unified `{error_code, message}` JSON shape via global error handlers.
 - ✅ **Cross-Origin Resource Sharing (CORS)**: Built-in `Flask-CORS` support for cross-domain requests from frontend frameworks (React, Vue, Next.js) with configurable origin whitelist (`CORS_ALLOWED_ORIGINS`).
 - ✅ **API & Database Health Check**: Dedicated `GET /health` endpoint for infrastructure liveness/readiness probes (PostgreSQL connection check & UTC timestamps).
@@ -238,6 +259,10 @@ JOIN products p ON oi.product_id = p.id;
 | **marshmallow**        | 4.3.1   | Input validation & serialization schemas                                   |
 | **pytest**             | 9.1.1   | Automated testing framework                                                |
 | **pytest-cov**         | 7.1.0   | Code coverage measurement & reporting                                      |
+| **bandit**             | 1.9.4   | AST-based security vulnerability scanner                                   |
+| **pylint**             | 4.0.7   | Code quality, complexity, and PEP 8 linter                                 |
+| **pip-audit**          | 2.10.1  | Known dependency vulnerability (CVE) scanner                               |
+| **logging**            | stdlib  | Application logging with `TimedRotatingFileHandler` & console output       |
 | **Werkzeug**           | 3.1.8   | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
 | **psycopg2-binary**    | 2.9.12  | PostgreSQL database driver                                                 |
 | **python-dotenv**      | 1.0.1   | Local environment configuration management                                 |
@@ -247,9 +272,9 @@ JOIN products p ON oi.product_id = p.id;
 ```
 module-2-ingrid-fortunata/
 ├── app/
-│   ├── __init__.py           # Flask app factory; registers blueprints & extensions
+│   ├── __init__.py           # Flask app factory; registers blueprints, logging & extensions
 │   ├── auth.py               # @roles_required() decorator for RBAC
-│   ├── config.py             # Config class (DATABASE_URL, JWT, OpenAPI settings)
+│   ├── config.py             # Config class (DATABASE_URL, JWT, Logging & OpenAPI settings)
 │   ├── errors.py             # Standard error response constructors & HTTP error helpers
 │   ├── extensions.py         # Extension instances (db, migrate, api, jwt, cors)
 │   ├── models/               # SQLAlchemy ORM Models
@@ -278,6 +303,8 @@ module-2-ingrid-fortunata/
 │   │   ├── __init__.py       # Utility exports
 │   │   └── pagination.py     # Centralized query pagination parameter parsing
 │   └── seed_data.py          # Database seeding script (categories, products, users, orders)
+├── logs/                     # Daily rotating application log files
+│   └── app.log               # Active consolidated application log
 ├── migrations/               # Alembic database migration history
 ├── tests/                    # Modular Pytest Suite (190 tests, 100% coverage)
 │   ├── conftest.py           # In-memory SQLite fixtures & auth header helpers
@@ -1147,3 +1174,108 @@ locust -f locustfile.py --host=http://127.0.0.1:5000 --headless -u 200 -r 10 --r
 - **RPS (Requests Per Second)**: System throughput under peak user concurrency.
 - **Response Times (Median, 95th & 99th Percentile)**: Latency distribution for catalog browsing vs database write operations.
 - **Failures & Error Rate %**: Verification that order placement and database locking maintain integrity without unhandled 500 errors.
+
+---
+
+## Logging Architecture & Observability
+
+The application implements a robust, production-ready logging strategy using Python's standard `logging` module with console streaming and daily rotating file persistence (`TimedRotatingFileHandler` writing to `logs/app.log` with a 7-day retention policy).
+
+> 📖 **Full Logging Guide**: For complete architectural details, dual-handler setup, log level matrices across environments, format tokens, and sample outputs, see [**docs/logging.md**](./docs/logging.md).
+
+---
+
+## Code Quality, Security & Dependency Auditing
+
+To maintain industry-grade code standards and verify application security, the repository utilizes **Bandit**, **Pylint**, and **Pip-Audit**.
+
+| Audit Tool | Focus Area | Checks Performed | Report Output |
+| :--- | :--- | :--- | :--- |
+| **`bandit`** | **Security Vulnerabilities** | Hardcoded secrets, insecure binds (`0.0.0.0`), unsafe deserialization, exception swallowing. | Terminal / Text / JSON |
+| **`pylint`** | **Code Quality & Style** | PEP 8 compliance, code smells, unused variables, docstring coverage, refactoring hints. | Rated score out of 10 |
+| **`pip-audit`** | **Dependency Vulnerabilities** | Scans installed packages against PyPI / OSV CVE advisory vulnerability databases. | Markdown / JSON / CycloneDX SBOM |
+
+---
+
+### 1. Security Audit: Bandit
+
+**Bandit** is an AST (Abstract Syntax Tree)-based static security analysis tool tailored for Python. It parses Python code into an AST and runs security plugins to identify vulnerabilities and insecure design patterns.
+
+#### Running Bandit:
+```bash
+# Scan application code and entrypoint recursively
+bandit -r app/ run.py
+
+# Export a clean text report for assignment submission
+bandit -r app/ run.py -f txt -o bandit_report.txt
+
+# Export report in JSON format for automated CI pipelines
+bandit -r app/ run.py -f json -o bandit_report.json
+```
+
+#### Key Checks Evaluated:
+- **`B104` (Binding to all interfaces)**: Flags `host='0.0.0.0'` in local development runners.
+- **`B105` / `B106` (Hardcoded passwords/keys)**: Detects hardcoded secret tokens or fallback API keys.
+- **`B110` (Try-Except-Pass)**: Flags empty exception handlers that swallow errors without logging.
+- **`B608` (SQL Injection)**: Verifies that database operations use parameterized SQLAlchemy ORM queries rather than raw string concatenation.
+
+---
+
+### 2. Code Quality & Linting: Pylint
+
+**Pylint** is a static code analysis tool that checks for programming errors, coding standards (PEP 8), code smells, and code complexity. It assigns an overall quality rating out of **10.00**.
+
+#### Running Pylint:
+```bash
+# 1. Check for critical syntax and semantic errors only (Exit code 0 on clean)
+pylint app/ run.py --errors-only
+
+# 2. Run full linting analysis with score rating
+pylint app/ run.py
+
+# 3. Export complete report to a file without failing on non-zero exit codes
+pylint app/ run.py --exit-zero > pylint_report.txt
+```
+
+#### What Pylint Evaluates:
+- **Convention (`C`)**: PEP 8 styling, line length limits (<= 100 characters), module/class/function docstrings.
+- **Refactor (`R`)**: Code duplication, high cyclomatic complexity, function argument counts.
+- **Warning (`W`)**: Unused arguments/imports, unreachable code, broad exception handlers.
+- **Error (`E`)**: Undefined variables, import resolution failures, syntax errors.
+
+---
+
+### 3. Dependency Vulnerability Audit: Pip-Audit
+
+**Pip-Audit** scans third-party Python dependencies in your virtual environment or [requirements.txt](file:///Users/ingrid.fortunata/Desktop/Learning/Revou/module-2-ingrid-fortunata/requirements.txt) against known security vulnerabilities cataloged in the Python Packaging Advisory Database (PyPA) and Open Source Vulnerabilities (OSV) database.
+
+#### Running Pip-Audit:
+```bash
+# 1. Audit active virtual environment packages
+pip-audit
+
+# 2. Audit against requirements.txt directly
+pip-audit -r requirements.txt
+
+# 3. Export human-readable Markdown report
+pip-audit -f markdown -o audit_report.md
+
+# 4. Generate CycloneDX Software Bill of Materials (SBOM) in JSON
+pip-audit -f cyclonedx-json -o sbom.json
+```
+
+#### What Pip-Audit Detects:
+- **Known CVEs**: Vulnerable package versions with publicly disclosed vulnerabilities.
+- **Remediation Advisories**: Exact minimum patch version required to fix each identified vulnerability (e.g. `Flask 3.0.3` -> `3.1.3`).
+
+---
+
+### 4. All-in-One Audit Execution Script
+
+Run all three audits sequentially in a single command:
+
+```bash
+echo "=== 1. BANDIT SECURITY SCAN ===" && bandit -r app/ run.py
+echo "=== 2. PIP-AUDIT DEPENDENCY SCAN ===" && pip-audit
+echo "=== 3. PYLINT CODE QUALITY SCORE ===" && pylint app/ run.py --exit-zero
+```
