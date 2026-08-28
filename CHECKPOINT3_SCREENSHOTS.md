@@ -21,6 +21,7 @@ All screenshots demonstrate real API execution against live endpoints using **Po
 | **Orders** | `GET` | `/orders/:id` | Retrieve order detail with price & item snapshots | `200 OK` | [View](#9-get-ordersid) |
 | **Orders** | `PATCH` | `/orders/:id` | Update order state (pending ➔ paid ➔ processing) | `200 OK` | [View](#10-patch-ordersid) |
 | **Orders** | `DELETE` | `/orders/:id` | Soft-cancel order & restore product stock | `200 OK` | [View](#11-delete-ordersid) |
+| **Database** | `SQL` | `PostgreSQL` | Live database tables (`users`, `categories`, `products`, `orders`, `order_items`) | `Verified` | [View](#4-postgresql-production-database-verification) |
 | **Testing** | `CLI` | `pytest` | Full automated test suite & 100% code coverage | `194 Passed` | [View](#5-automated-test-suite--coverage-pytest) |
 | **Load Test** | `CLI / Web` | `locust` | Concurrency & sequential customer journey testing | `200 OK / 0% Failures` | [View](#6-load--performance-testing-locust) |
 
@@ -124,9 +125,38 @@ All screenshots demonstrate real API execution against live endpoints using **Po
 
 ### PostgreSQL Table Views (pgAdmin / DBeaver)
 
-![Database Order Items Table](./img/db_order_items.png)
+#### 1. `users` Table
+- **Description**: Production database records storing user credentials, hashed passwords, roles (`admin`, `customer`), and profiles.
 
-*Figure: Production database view showing `order_items` junction table snapshotting `price_at_purchase`, `size`, `color`, and `quantity`.*
+![Database Users Table](./img/checkpoint3/db_users.png)
+
+---
+
+#### 2. `categories` Table
+- **Description**: Production database records storing fashion product categories, hierarchy, and status.
+
+![Database Categories Table](./img/checkpoint3/db_categories.png)
+
+---
+
+#### 3. `products` Table
+- **Description**: Production database records storing fashion products with pricing, inventory stock, attributes (`gender`, `size`, `color`, `material`, `sku`), and base64 images.
+
+![Database Products Table](./img/checkpoint3/db_products.png)
+
+---
+
+#### 4. `orders` Table
+- **Description**: Production database records storing customer orders, status transitions, shipping recipient info, and totals.
+
+![Database Orders Table](./img/checkpoint3/db_orders.png)
+
+---
+
+#### 5. `order_items` Table
+- **Description**: Production database records storing order line items with immutable snapshots of price, size, color, and quantity at purchase time.
+
+![Database Order Items Table](./img/checkpoint3/db_order_items.png)
 
 ---
 
