@@ -1,40 +1,86 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/wGq_UtnU)
-
 # RevoFashion API — Online Clothing Store Backend
+
+[![Live API on Render](https://img.shields.io/badge/Render-Live%20API-46E3B7?logo=render&logoColor=white)](https://revofashion-shop.onrender.com)
+[![Swagger UI](https://img.shields.io/badge/OpenAPI%203.0-Swagger%20UI-85EA2D?logo=swagger&logoColor=black)](https://revofashion-shop.onrender.com/swagger-ui)
+[![Database](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
+[![Container](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com)
+[![Tests](https://img.shields.io/badge/Tests-100%25%20Coverage-brightgreen?logo=pytest&logoColor=white)](#step-8-run-automated-test-suite--coverage-pytest)
+
+> 🚀 **Live Production Deployment & Interactive Documentation**:
+> - 🌐 **Live API Base URL**: [**`https://revofashion-shop.onrender.com`**](https://revofashion-shop.onrender.com)
+> - 📖 **Interactive Swagger UI (API Docs)**: [**`https://revofashion-shop.onrender.com/swagger-ui`**](https://revofashion-shop.onrender.com/swagger-ui)
+> - 📄 **OpenAPI Specification (JSON)**: [**`https://revofashion-shop.onrender.com/openapi.json`**](https://revofashion-shop.onrender.com/openapi.json)
+> - 🩺 **Health Check Endpoint**: [**`https://revofashion-shop.onrender.com/health`**](https://revofashion-shop.onrender.com/health)
+> - 🗄️ **Managed Cloud Database**: **Supabase PostgreSQL**
+> - 🐳 **Containerization**: **Docker** & **Docker Compose**
+> - ☁️ **Cloud Host**: **Render Web Service** with Gunicorn WSGI
 
 ## Executive Overview
 
-**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, and **PostgreSQL**.
+**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, **PostgreSQL (Supabase Cloud & Local)**, and containerized with **Docker**, deployed in production on **Render**.
 
 It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC) with simplified roles (`superadmin`, `admin`, `customer`).
 
 > 📷 **Checkpoint 3 Postman Verification**: For complete visual proof of all Postman requests (GET, POST, PUT, PATCH, DELETE) for Products, Categories, Orders, and database views, see [**CHECKPOINT3_SCREENSHOTS.md**](./CHECKPOINT3_SCREENSHOTS.md).
 
-This document serves as a complete technical guide for **Backend Developers** (understanding architecture, DB design rationale, ORM models, migrations, and local setup) and **Frontend Developers** (implementing UI workflows, request payloads, response formats, headers, and enum options).
+This document serves as a complete technical guide for **Backend Developers** (understanding architecture, DB design rationale, ORM models, migrations, Docker workflows, and cloud setup) and **Frontend Developers** (implementing UI workflows, request payloads, response formats, headers, and enum options).
 
 ---
 
-## Local Setup & Backend Database Loading Guide
+## Quick Start & Setup Options
 
-Follow these step-by-step instructions to set up the environment and seed PostgreSQL locally.
+You can run RevoFashion API using either **Docker & Docker Compose** (Option 1 - zero local Python/DB install needed) or standard **Python Virtual Environment** (Option 2 - local PostgreSQL or cloud Supabase).
 
-### Prerequisites
+---
+
+### Option 1: Quick Start with Docker & Docker Compose (Recommended)
+
+Run the entire application stack (Flask API + PostgreSQL database) with a single command:
+
+```bash
+# Clone and enter directory
+cd module-2-ingrid-fortunata
+
+# Build and start Docker containers in background
+docker-compose up --build -d
+```
+
+- 🌐 **API Base URL**: `http://localhost:5001`
+- 📖 **Interactive Swagger UI**: `http://localhost:5001/swagger-ui`
+- 🩺 **Health Check**: `http://localhost:5001/health`
+- 🗄️ **PostgreSQL Container**: Running on `localhost:5432`
+
+To check container logs or stop:
+```bash
+# View container logs
+docker-compose logs -f
+
+# Stop containers
+docker-compose down
+```
+
+---
+
+### Option 2: Local Python & Virtual Environment Setup
+
+Follow these step-by-step instructions to set up the environment and run against local PostgreSQL or cloud **Supabase PostgreSQL**.
+
+#### Prerequisites
 
 - **Python 3.10+**
-- **PostgreSQL 14+** running locally on port `5432`
-- Terminal tool (`psql`) or graphical client (pgAdmin / DBeaver)
+- **PostgreSQL 14+** running locally on port `5432` **OR** a cloud **Supabase PostgreSQL database**
+- Terminal tool (`psql`) or graphical client (pgAdmin / DBeaver / Supabase Dashboard)
 
 ---
 
-### Step-by-Step Setup
+#### Step 1: Create Database (Local or Supabase)
 
-#### Step 1: Create PostgreSQL Database
-
-Launch PostgreSQL CLI or pgAdmin and execute:
-
-```sql
-CREATE DATABASE revoshop_db;
-```
+- **Local PostgreSQL**:
+  ```sql
+  CREATE DATABASE revoshop_db;
+  ```
+- **Cloud Supabase**:
+  Create a project at [supabase.com](https://supabase.com). Copy the direct connection string (`postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`) from **Project Settings → Database → Connection string → URI**.
 
 ---
 
@@ -63,7 +109,7 @@ pip install -r requirements.txt
 
 #### Step 3: Configure Local Environment Variables
 
-Copy `.env.example` to `.env` and fill in your local PostgreSQL credentials:
+Copy `.env.example` to `.env` and fill in your local or Supabase credentials:
 
 ```bash
 cp .env.example .env
@@ -76,8 +122,13 @@ FLASK_APP=run.py
 FLASK_ENV=development
 SECRET_KEY=dev-secret-key-change-in-production
 JWT_SECRET_KEY=dev-jwt-secret-change-in-production
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,https://revofashion-shop.onrender.com
+
+# For Local PostgreSQL:
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/revoshop_db
+
+# OR For Cloud Supabase PostgreSQL:
+# DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT_REF.supabase.co:5432/postgres
 
 # Locust Load Testing Configuration
 LOCUST_HOST=http://127.0.0.1:5000
@@ -87,15 +138,15 @@ LOCUST_USER_PASSWORD=alice_password
 
 > 💡 **Notes**:
 >
-> - Replace `postgres:postgres@localhost:5432` with your actual local PostgreSQL user, password, host, and port.
-> - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed frontend domains (e.g. `http://localhost:3000,http://localhost:5173,http://localhost:8080` or `*` for development).
-> - `LOCUST_HOST`: The base URL targeting the backend API during load tests (defaults to `http://127.0.0.1:5000`).
+> - `DATABASE_URL`: Automatically handles `postgres://` or `postgresql://` URIs (e.g. from Render or Supabase).
+> - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed frontend domains (e.g. `http://localhost:3000,http://localhost:5173` or `*` for development).
+> - `LOCUST_HOST`: The base URL targeting the backend API during load tests (defaults to `http://127.0.0.1:5000` or `https://revofashion-shop.onrender.com`).
 
 ---
 
 #### Step 4: Apply Database Migrations (Flask-Migrate / Alembic)
 
-Run the migration command to construct all 6 PostgreSQL tables and indexes:
+Run the migration command to construct all 6 tables and indexes on your database:
 
 ```bash
 flask db upgrade
@@ -149,10 +200,13 @@ The API server will launch at: **`http://127.0.0.1:5000`**
 
 #### Step 7: Access Interactive Swagger UI Documentation
 
-Open your browser to test endpoints interactively:
+Open your browser to test endpoints interactively across environments:
 
-> 🌐 **Swagger UI**: **`http://127.0.0.1:5000/swagger-ui`**  
-> 📄 **OpenAPI Spec (JSON)**: **`http://127.0.0.1:5000/openapi.json`**
+| Environment | Swagger UI (Interactive API Docs) | OpenAPI Specification (JSON) |
+| :--- | :--- | :--- |
+| **🚀 Production (Render)** | [**`https://revofashion-shop.onrender.com/swagger-ui`**](https://revofashion-shop.onrender.com/swagger-ui) | [**`https://revofashion-shop.onrender.com/openapi.json`**](https://revofashion-shop.onrender.com/openapi.json) |
+| **💻 Local Python Server** | [**`http://127.0.0.1:5000/swagger-ui`**](http://127.0.0.1:5000/swagger-ui) | [**`http://127.0.0.1:5000/openapi.json`**](http://127.0.0.1:5000/openapi.json) |
+| **🐳 Docker Compose** | [**`http://localhost:5001/swagger-ui`**](http://localhost:5001/swagger-ui) | [**`http://localhost:5001/openapi.json`**](http://localhost:5001/openapi.json) |
 
 ---
 
@@ -234,6 +288,8 @@ JOIN products p ON oi.product_id = p.id;
 
 ## Core Features
 
+- ✅ **Cloud & Container Ready**: Full **Docker** & **Docker Compose** containerization, deployed live on **Render** with **Supabase Managed PostgreSQL**.
+- ✅ **OpenAPI 3.0 / Interactive Swagger UI**: Live docs at `https://revofashion-shop.onrender.com/swagger-ui` and local `/swagger-ui` via `Flask-Smorest` and `marshmallow`.
 - ✅ **PostgreSQL Schema (6 Tables)**: Normalized relational structure (`users`, `categories`, `products`, `product_images`, `orders`, `order_items`).
 - ✅ **Fashion-Specific Attributes**: Dedicated support for clothing sizes (`XS`–`XXL`, `FREE`), colors, materials, target genders (`Men`, `Women`, `Unisex`, `Kids`), and unique SKUs.
 - ✅ **Decoupled Product Gallery**: Product image gallery table supporting up to 3 base64-encoded images per product with primary image thumbnail selection.
@@ -249,36 +305,46 @@ JOIN products p ON oi.product_id = p.id;
 - ✅ **Consistent Error Responses**: All API errors — including schema validation failures (422), JWT issues, and server errors — return a unified `{error_code, message}` JSON shape via global error handlers.
 - ✅ **Cross-Origin Resource Sharing (CORS)**: Built-in `Flask-CORS` support for cross-domain requests from frontend frameworks (React, Vue, Next.js) with configurable origin whitelist (`CORS_ALLOWED_ORIGINS`).
 - ✅ **API & Database Health Check**: Dedicated `GET /health` endpoint for infrastructure liveness/readiness probes (PostgreSQL connection check & UTC timestamps).
-- ✅ **OpenAPI 3.0 / Swagger UI**: Auto-generated interactive API docs via `Flask-Smorest` and `marshmallow`.
 
 ---
 
 ## Technology Stack & Architecture
 
-| Layer / Technology     | Version | Purpose                                                                    |
-| :--------------------- | :------ | :------------------------------------------------------------------------- |
-| **Python**             | 3.x     | Primary programming language                                               |
-| **Flask**              | 3.0.3   | Web framework & App Factory pattern                                        |
-| **Flask-CORS**         | 6.0.5   | Cross-Origin Resource Sharing middleware                                   |
-| **Flask-SQLAlchemy**   | 3.1.1   | Object-Relational Mapping (ORM) layer                                      |
-| **Flask-Migrate**      | 4.0.7   | Database migration management (Alembic)                                    |
-| **Flask-Smorest**      | 0.47.0  | OpenAPI 3.0 specification & Swagger UI generation                          |
-| **Flask-JWT-Extended** | 4.6.0   | Stateless JSON Web Token authentication                                    |
-| **marshmallow**        | 4.3.1   | Input validation & serialization schemas                                   |
-| **pytest**             | 9.1.1   | Automated testing framework                                                |
-| **pytest-cov**         | 7.1.0   | Code coverage measurement & reporting                                      |
-| **bandit**             | 1.9.4   | AST-based security vulnerability scanner                                   |
-| **pylint**             | 4.0.7   | Code quality, complexity, and PEP 8 linter                                 |
-| **pip-audit**          | 2.10.1  | Known dependency vulnerability (CVE) scanner                               |
-| **logging**            | stdlib  | Application logging with `TimedRotatingFileHandler` & console output       |
-| **Werkzeug**           | 3.1.8   | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
-| **psycopg2-binary**    | 2.9.12  | PostgreSQL database driver                                                 |
-| **python-dotenv**      | 1.0.1   | Local environment configuration management                                 |
+| Layer / Technology | Version | Purpose |
+| :--- | :--- | :--- |
+| **Python** | 3.11 / 3.x | Primary programming language |
+| **Flask** | 3.0.3 | Web framework & App Factory pattern |
+| **Gunicorn** | 23.0.0 | Production WSGI HTTP server (multi-worker / multi-thread) |
+| **Render** | Cloud PaaS | Production application hosting & continuous deployment |
+| **Supabase** | Cloud DB | Managed PostgreSQL cloud database |
+| **Docker & Compose** | 20+ | Application containerization & multi-container local stack |
+| **Flask-CORS** | 6.0.5 | Cross-Origin Resource Sharing middleware |
+| **Flask-SQLAlchemy** | 3.1.1 | Object-Relational Mapping (ORM) layer |
+| **Flask-Migrate** | 4.0.7 | Database migration management (Alembic) |
+| **Flask-Smorest** | 0.47.0 | OpenAPI 3.0 specification & Swagger UI generation |
+| **Flask-JWT-Extended** | 4.6.0 | Stateless JSON Web Token authentication |
+| **marshmallow** | 4.3.1 | Input validation & serialization schemas |
+| **pytest** | 9.1.1 | Automated testing framework (190 tests, 100% coverage) |
+| **pytest-cov** | 7.1.0 | Code coverage measurement & reporting |
+| **bandit** | 1.9.4 | AST-based security vulnerability scanner |
+| **pylint** | 4.0.7 | Code quality, complexity, and PEP 8 linter |
+| **pip-audit** | 2.10.1 | Known dependency vulnerability (CVE) scanner |
+| **logging** | stdlib | Application logging with `TimedRotatingFileHandler` & console output |
+| **Werkzeug** | 3.1.8 | Secure password hashing (`generate_password_hash` / `check_password_hash`) |
+| **psycopg2-binary** | 2.9.12 | PostgreSQL database driver |
+| **python-dotenv** | 1.0.1 | Local environment configuration management |
 
 ### Project Directory Structure
 
 ```
 module-2-ingrid-fortunata/
+├── Dockerfile                # Multi-stage production Docker container definition
+├── docker-compose.yml        # Docker Compose configuration (Flask API + PostgreSQL)
+├── .dockerignore             # Excluded files for optimized Docker builds
+├── Procfile                  # Process file for PaaS deployment (Render)
+├── requirements.txt          # Production dependency specifications (lean runtime)
+├── requirements-dev.txt      # Development & testing dependency specifications
+├── run.py                    # Application entry point (`python3 run.py`)
 ├── app/
 │   ├── __init__.py           # Flask app factory; registers blueprints, logging & extensions
 │   ├── auth.py               # @roles_required() decorator for RBAC
@@ -328,11 +394,7 @@ module-2-ingrid-fortunata/
 │   └── routes/               # Route integration tests (auth, users, categories, products, orders)
 ├── img/                      # ERD Diagram & media assets
 ├── queries/                  # SQL scripts for verification
-├── .env.example              # Template for local environment variables
-├── Procfile                  # Process file for PaaS deployment (Render / Heroku)
-├── requirements.txt          # Production dependency specifications
-├── requirements-dev.txt      # Development & testing dependency specifications
-└── run.py                    # Application entry point (`python3 run.py`)
+└── .env.example              # Template for local environment variables
 ```
 
 ---
@@ -543,7 +605,13 @@ pending ──→ paid ──→ processing ──→ shipped ──→ delivere
 
 ### General API Conventions
 
-- **Base URL**: `http://127.0.0.1:5000`
+- **Base URLs**:
+  - **🚀 Production (Render)**: `https://revofashion-shop.onrender.com`
+  - **💻 Local Dev**: `http://127.0.0.1:5000`
+  - **🐳 Docker Compose**: `http://localhost:5001`
+- **Interactive Documentation**:
+  - **Swagger UI**: `https://revofashion-shop.onrender.com/swagger-ui` (or `/swagger-ui` locally)
+  - **OpenAPI 3.0 Spec**: `https://revofashion-shop.onrender.com/openapi.json`
 - **Request/Response Format**: `application/json`
 - **Authentication Header**:
   ```http
@@ -1121,6 +1189,90 @@ Client HTTP Request
    flask db migrate -m "Describe model changes"
    flask db upgrade
    ```
+
+---
+
+## Docker Containerization & Cloud Deployment Guide (Render + Supabase)
+
+RevoFashion API is production-ready and deployed live on **Render** backed by a high-availability **Supabase Managed PostgreSQL** database.
+
+### 🌐 Live Production Access
+
+| Resource | URL | Description |
+| :--- | :--- | :--- |
+| **Live Backend API** | [**`https://revofashion-shop.onrender.com`**](https://revofashion-shop.onrender.com) | Production base endpoint |
+| **Interactive Swagger UI** | [**`https://revofashion-shop.onrender.com/swagger-ui`**](https://revofashion-shop.onrender.com/swagger-ui) | Full interactive API documentation & testing |
+| **OpenAPI Specification** | [**`https://revofashion-shop.onrender.com/openapi.json`**](https://revofashion-shop.onrender.com/openapi.json) | Raw OpenAPI 3.0 JSON schema |
+| **Health Check** | [**`https://revofashion-shop.onrender.com/health`**](https://revofashion-shop.onrender.com/health) | DB connection & service health probe |
+
+---
+
+### 🗄️ Cloud Database: Supabase PostgreSQL
+
+The production environment connects to **Supabase**, providing automated backups, SSL/TLS encryption, and connection pooling.
+
+#### Configuring Supabase `DATABASE_URL`:
+1. Log in to [Supabase Dashboard](https://supabase.com/dashboard) and navigate to **Project Settings → Database**.
+2. Under **Connection string**, select **URI**.
+3. Use the URI format:
+   ```env
+   DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
+   ```
+   *(Note: The application automatically handles `postgres://` to `postgresql://` conversion in `app/config.py`)*.
+
+---
+
+### ☁️ Cloud Deployment on Render
+
+The service is hosted on **Render** as a Python / Docker Web Service.
+
+#### Step-by-Step Render Setup:
+1. **Create Web Service**: Connect your GitHub repository `module-2-ingrid-fortunata` to Render.
+2. **Environment**: Select `Python 3` (uses `Procfile` and `requirements.txt`) or `Docker` (uses `Dockerfile`).
+3. **Set Environment Variables in Render Dashboard**:
+   | Variable | Value | Description |
+   | :--- | :--- | :--- |
+   | `FLASK_ENV` | `production` | Enables production security & logging modes |
+   | `SECRET_KEY` | `<generate-secure-secret-32-chars>` | Session signature secret |
+   | `JWT_SECRET_KEY` | `<generate-secure-jwt-secret-32-chars>` | JWT signing secret |
+   | `DATABASE_URL` | `postgresql://postgres:[PWD]@db.[REF].supabase.co:5432/postgres` | Supabase connection string |
+   | `CORS_ALLOWED_ORIGINS` | `*` or `https://your-frontend.vercel.app` | Frontend whitelist |
+   | `PORT` | `5000` (or Render default `10000`) | Server port binding |
+4. **Deploy**: Render automatically pulls latest commits from `main`, executes DB migrations on start, and launches Gunicorn.
+
+---
+
+### 🐳 Docker & Docker Compose Usage
+
+The repository includes a production-grade [Dockerfile](./Dockerfile) and [docker-compose.yml](./docker-compose.yml).
+
+#### 1. Running Standalone Docker Container:
+```bash
+# Build the production Docker image
+docker build -t revofashion-api .
+
+# Run container binding port 5000
+docker run -d -p 5000:5000 \
+  -e DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT_REF.supabase.co:5432/postgres" \
+  -e SECRET_KEY="your-production-secret" \
+  -e JWT_SECRET_KEY="your-jwt-secret" \
+  --name revofashion_app revofashion-api
+```
+
+#### 2. Running Full Stack via Docker Compose:
+```bash
+# Launches both PostgreSQL 15 and Flask API with auto-migrations
+docker-compose up --build -d
+
+# Check running services
+docker-compose ps
+
+# Run seed data inside Docker container
+docker exec -it revofashion_api python3 -m app.seed_data
+
+# Stop and remove containers & networks
+docker-compose down
+```
 
 ---
 
