@@ -329,6 +329,7 @@ module-2-ingrid-fortunata/
 ├── img/                      # ERD Diagram & media assets
 ├── queries/                  # SQL scripts for verification
 ├── .env.example              # Template for local environment variables
+├── Procfile                  # Process file for PaaS deployment (Render / Heroku)
 ├── requirements.txt          # Production dependency specifications
 ├── requirements-dev.txt      # Development & testing dependency specifications
 └── run.py                    # Application entry point (`python3 run.py`)
