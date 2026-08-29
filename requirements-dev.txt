@@ -1,0 +1,13 @@
+-r requirements.txt
+
+# Testing & Code Coverage
+pytest==9.1.1
+pytest-cov==7.1.0
+
+# Load Testing
+locust==2.46.3
+
+# Linting & Security Auditing
+pylint==4.0.7
+bandit==1.9.4
+pip-audit==2.10.1
