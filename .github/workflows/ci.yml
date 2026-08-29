@@ -1,0 +1,60 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ==========================================
+  # 1. CONTINUOUS INTEGRATION (CI)
+  # ==========================================
+  test:
+    name: Run Automated Tests & Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Pytest & Coverage
+        env:
+          SECRET_KEY: ci_test_secret_key
+          JWT_SECRET_KEY: ci_test_jwt_secret_key
+          FLASK_ENV: testing
+        run: |
+          pytest
+
+  # ==========================================
+  # 2. CONTINUOUS DEPLOYMENT (CD - Optional)
+  # ==========================================
+  deploy:
+    name: Trigger Render Deployment
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Render via Webhook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Triggering deployment on Render..."
+            curl -f -X POST "$RENDER_DEPLOY_HOOK"
+            echo "Render deployment triggered successfully!"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL secret not set. Render will use standard Auto-Deploy on commit."
+          fi
