@@ -52,6 +52,10 @@ source venv/bin/activate        # On Windows: venv\Scripts\activate
 
 # Upgrade pip and install dependencies
 pip install --upgrade pip
+# For Development (includes pytest, locust, pylint, bandit, etc.):
+pip install -r requirements-dev.txt
+
+# Or for Production (lean / without test & lint tools):
 pip install -r requirements.txt
 ```
 
@@ -325,7 +329,8 @@ module-2-ingrid-fortunata/
 ├── img/                      # ERD Diagram & media assets
 ├── queries/                  # SQL scripts for verification
 ├── .env.example              # Template for local environment variables
-├── requirements.txt          # Python dependency specifications
+├── requirements.txt          # Production dependency specifications
+├── requirements-dev.txt      # Development & testing dependency specifications
 └── run.py                    # Application entry point (`python3 run.py`)
 ```
 
@@ -1192,6 +1197,7 @@ PYTHONPATH=. python3 app/seed_data.py --reset
 ```
 
 > 🔄 **What the reset command does**:
+>
 > 1. Clears all test orders and order items.
 > 2. Restores all product inventory stock quantities back to their initial quantities.
 > 3. Cleans up dynamically generated test users while retaining the 4 default baseline accounts (`superadmin_user`, `admin_user`, `alice_smith`, `deactivated_user`).
@@ -1211,11 +1217,11 @@ The application implements a robust, production-ready logging strategy using Pyt
 
 To maintain industry-grade code standards and verify application security, the repository utilizes **Bandit**, **Pylint**, and **Pip-Audit**.
 
-| Audit Tool | Focus Area | Checks Performed | Report Output |
-| :--- | :--- | :--- | :--- |
-| **`bandit`** | **Security Vulnerabilities** | Hardcoded secrets, insecure binds (`0.0.0.0`), unsafe deserialization, exception swallowing. | Terminal / Text / JSON |
-| **`pylint`** | **Code Quality & Style** | PEP 8 compliance, code smells, unused variables, docstring coverage, refactoring hints. | Rated score out of 10 |
-| **`pip-audit`** | **Dependency Vulnerabilities** | Scans installed packages against PyPI / OSV CVE advisory vulnerability databases. | Markdown / JSON / CycloneDX SBOM |
+| Audit Tool      | Focus Area                     | Checks Performed                                                                             | Report Output                    |
+| :-------------- | :----------------------------- | :------------------------------------------------------------------------------------------- | :------------------------------- |
+| **`bandit`**    | **Security Vulnerabilities**   | Hardcoded secrets, insecure binds (`0.0.0.0`), unsafe deserialization, exception swallowing. | Terminal / Text / JSON           |
+| **`pylint`**    | **Code Quality & Style**       | PEP 8 compliance, code smells, unused variables, docstring coverage, refactoring hints.      | Rated score out of 10            |
+| **`pip-audit`** | **Dependency Vulnerabilities** | Scans installed packages against PyPI / OSV CVE advisory vulnerability databases.            | Markdown / JSON / CycloneDX SBOM |
 
 ---
 
@@ -1224,6 +1230,7 @@ To maintain industry-grade code standards and verify application security, the r
 **Bandit** is an AST (Abstract Syntax Tree)-based static security analysis tool tailored for Python. It parses Python code into an AST and runs security plugins to identify vulnerabilities and insecure design patterns.
 
 #### Running Bandit:
+
 ```bash
 # Scan application code and entrypoint recursively
 bandit -r app/ run.py
@@ -1236,6 +1243,7 @@ bandit -r app/ run.py -f json -o bandit_report.json
 ```
 
 #### Key Checks Evaluated:
+
 - **`B104` (Binding to all interfaces)**: Flags `host='0.0.0.0'` in local development runners.
 - **`B105` / `B106` (Hardcoded passwords/keys)**: Detects hardcoded secret tokens or fallback API keys.
 - **`B110` (Try-Except-Pass)**: Flags empty exception handlers that swallow errors without logging.
@@ -1248,6 +1256,7 @@ bandit -r app/ run.py -f json -o bandit_report.json
 **Pylint** is a static code analysis tool that checks for programming errors, coding standards (PEP 8), code smells, and code complexity. It assigns an overall quality rating out of **10.00**.
 
 #### Running Pylint:
+
 ```bash
 # 1. Check for critical syntax and semantic errors only (Exit code 0 on clean)
 pylint app/ run.py --errors-only
@@ -1260,6 +1269,7 @@ pylint app/ run.py --exit-zero > pylint_report.txt
 ```
 
 #### What Pylint Evaluates:
+
 - **Convention (`C`)**: PEP 8 styling, line length limits (<= 100 characters), module/class/function docstrings.
 - **Refactor (`R`)**: Code duplication, high cyclomatic complexity, function argument counts.
 - **Warning (`W`)**: Unused arguments/imports, unreachable code, broad exception handlers.
@@ -1272,6 +1282,7 @@ pylint app/ run.py --exit-zero > pylint_report.txt
 **Pip-Audit** scans third-party Python dependencies in your virtual environment or [requirements.txt](file:///Users/ingrid.fortunata/Desktop/Learning/Revou/module-2-ingrid-fortunata/requirements.txt) against known security vulnerabilities cataloged in the Python Packaging Advisory Database (PyPA) and Open Source Vulnerabilities (OSV) database.
 
 #### Running Pip-Audit:
+
 ```bash
 # 1. Audit active virtual environment packages
 pip-audit
@@ -1287,6 +1298,7 @@ pip-audit -f cyclonedx-json -o sbom.json
 ```
 
 #### What Pip-Audit Detects:
+
 - **Known CVEs**: Vulnerable package versions with publicly disclosed vulnerabilities.
 - **Remediation Advisories**: Exact minimum patch version required to fix each identified vulnerability (e.g. `Flask 3.0.3` -> `3.1.3`).
 
