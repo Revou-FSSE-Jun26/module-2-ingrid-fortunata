@@ -69,6 +69,7 @@ def register_user(user_data):
 
 
 @users_bp.route('/users', methods=['GET'])
+@users_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin')
 @users_bp.response(200, UserListResponseSchema)
 def get_all_users():
@@ -110,6 +111,7 @@ def get_all_users():
 
 
 @users_bp.route('/users/<int:id>', methods=['GET'])
+@users_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @users_bp.response(200, UserGetResponseSchema)
 def get_user_by_id(id):
@@ -138,6 +140,7 @@ def get_user_by_id(id):
 
 
 @users_bp.route('/users/<int:id>', methods=['PUT'])
+@users_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @users_bp.arguments(UserUpdateInputSchema, location='json')
 @users_bp.response(200, UserGetResponseSchema)

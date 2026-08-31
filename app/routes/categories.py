@@ -23,6 +23,7 @@ categories_bp = Blueprint('categories', __name__, description='Operations on cat
 
 
 @categories_bp.route('/categories', methods=['POST'])
+@categories_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin', 'admin')
 @categories_bp.arguments(CategoryCreateInputSchema, location='json')
 @categories_bp.response(201, CategoryGetResponseSchema)
@@ -109,6 +110,7 @@ def get_category_by_id(id):
 
 
 @categories_bp.route('/categories/<int:id>', methods=['PUT'])
+@categories_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin', 'admin')
 @categories_bp.arguments(CategoryUpdateInputSchema, location='json')
 @categories_bp.response(200, CategoryGetResponseSchema)
@@ -152,7 +154,9 @@ def update_category(category_data, id):
 
 
 @categories_bp.route('/categories/<int:id>', methods=['DELETE'])
+@categories_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin', 'admin')
+@categories_bp.response(204)
 def delete_category(id):
     """Delete a category.
     WARNING: Deleting a category will unlink (set category_id = NULL) all products that belong to it.

@@ -192,6 +192,7 @@ def get_product_by_id(id):
 
 
 @products_bp.route('/products', methods=['POST'])
+@products_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin', 'admin')
 @products_bp.arguments(ProductCreateInputSchema, location='json')
 @products_bp.response(201, ProductDetailResponseSchema)
@@ -226,6 +227,7 @@ def create_product(product_data):
 
 
 @products_bp.route('/products/<int:id>', methods=['PUT'])
+@products_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin', 'admin')
 @products_bp.arguments(ProductUpdateInputSchema, location='json')
 @products_bp.response(200, ProductDetailResponseSchema)
@@ -265,7 +267,9 @@ def update_product(product_data, id):
 
 
 @products_bp.route('/products/<int:id>', methods=['DELETE'])
+@products_bp.doc(security=[{"BearerAuth": []}])
 @roles_required('superadmin', 'admin')
+@products_bp.response(204)
 def delete_product(id):
     """Delete a product.
     - If linked to ACTIVE in-progress orders ('pending', 'paid', 'processing', 'shipped'): blocked with 409 Conflict.
