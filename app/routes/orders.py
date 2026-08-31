@@ -89,6 +89,7 @@ def build_filtered_orders_query(user: User, args: dict):
 
 
 @orders_bp.route('/orders', methods=['POST'])
+@orders_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @orders_bp.arguments(OrderCreateInputSchema, location='json')
 @orders_bp.response(201, OrderResponseWrapperSchema)
@@ -142,6 +143,7 @@ def create_order(order_data):
 
 
 @orders_bp.route('/orders', methods=['GET'])
+@orders_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @orders_bp.response(200, OrderListResponseSchema)
 def get_orders():
@@ -179,6 +181,7 @@ def get_orders():
 
 
 @orders_bp.route('/orders/<int:id>', methods=['GET'])
+@orders_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @orders_bp.response(200, OrderResponseWrapperSchema)
 def get_order_by_id(id):
@@ -198,6 +201,7 @@ def get_order_by_id(id):
 
 
 @orders_bp.route('/orders/<int:id>', methods=['PATCH'])
+@orders_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @orders_bp.arguments(OrderUpdateStatusSchema, location='json')
 @orders_bp.response(200, OrderResponseWrapperSchema)
@@ -254,6 +258,7 @@ def update_order_status(update_data, id):
 
 
 @orders_bp.route('/orders/<int:id>', methods=['DELETE'])
+@orders_bp.doc(security=[{"BearerAuth": []}])
 @jwt_required()
 @orders_bp.response(200, OrderResponseWrapperSchema)
 def delete_order(id):
