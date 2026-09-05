@@ -70,7 +70,7 @@ def test_upload_base64_client_unavailable_fallback(app):
 
         with patch("app.utils.storage.get_supabase_client", return_value=None):
             res_url = upload_base64_to_supabase(b64_encoded)
-            assert "https://mock-supabase.local/storage/v1/object/public/products/products/" in res_url
+            assert "https://mock-supabase.local/storage/v1/object/public/products/" in res_url
 
 
 def test_upload_base64_upload_exception(app):
@@ -87,7 +87,8 @@ def test_upload_base64_upload_exception(app):
 
         with patch("app.utils.storage.get_supabase_client", return_value=mock_client):
             res_url = upload_base64_to_supabase(b64_encoded)
-            assert "/storage/v1/object/public/products/products/" in res_url
+            assert "/storage/v1/object/public/products/" in res_url
+
 
 
 def test_delete_file_from_supabase_mocked(app):

@@ -31,10 +31,11 @@ jobs:
 
       - name: Run Pytest & Coverage
         env:
-          SECRET_KEY: ci_test_secret_key
-          JWT_SECRET_KEY: ci_test_jwt_secret_key
+          SECRET_KEY: ci_test_secret_key_32_characters_long_12345
+          JWT_SECRET_KEY: ci_test_jwt_secret_key_32_chars_long_12345
           FLASK_ENV: testing
         run: |
+
           pytest
 
   # ==========================================
