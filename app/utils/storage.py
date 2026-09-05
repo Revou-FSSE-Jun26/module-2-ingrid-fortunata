@@ -63,7 +63,7 @@ def parse_base64_image(base64_data: str) -> Tuple[bytes, str, str]:
     return file_bytes, mime_type, ext
 
 
-def upload_base64_to_supabase(base64_data: str, folder: str = "products") -> str:
+def upload_base64_to_supabase(base64_data: str, folder: str = "") -> str:
     """
     Decodes a base64 image string and uploads the binary file to Supabase Storage.
     Returns: Public URL of the uploaded image.
@@ -89,6 +89,7 @@ def upload_base64_to_supabase(base64_data: str, folder: str = "products") -> str
     )
     unique_filename = f"{uuid.uuid4().hex}.{ext}"
     file_path = f"{folder}/{unique_filename}" if folder else unique_filename
+
 
     client = get_supabase_client()
     if not client:
