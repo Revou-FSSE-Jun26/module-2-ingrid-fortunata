@@ -35,7 +35,8 @@ def save_product_images(product_id: int, images_data: list, replace: bool = Fals
 
     for img_obj in images_data:
         raw_image_data = img_obj['image_base64']
-        image_url = upload_base64_to_supabase(raw_image_data, folder="products")
+        image_url = upload_base64_to_supabase(raw_image_data, folder="")
+
 
         new_img = ProductImage(
             product_id=product_id,
