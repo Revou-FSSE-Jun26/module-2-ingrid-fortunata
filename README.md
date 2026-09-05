@@ -3,6 +3,7 @@
 [![Live API on Render](https://img.shields.io/badge/Render-Live%20API-46E3B7?logo=render&logoColor=white)](https://revofashion-shop.onrender.com)
 [![Swagger UI](https://img.shields.io/badge/OpenAPI%203.0-Swagger%20UI-85EA2D?logo=swagger&logoColor=black)](https://revofashion-shop.onrender.com/swagger-ui)
 [![Database](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
+[![Storage](https://img.shields.io/badge/Storage-Supabase%20Storage%20CDN-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/storage)
 [![Container](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com)
 [![Tests](https://img.shields.io/badge/Tests-100%25%20Coverage-brightgreen?logo=pytest&logoColor=white)](#step-8-run-automated-test-suite--coverage-pytest)
 
@@ -12,14 +13,16 @@
 > - 📄 **OpenAPI Specification (JSON)**: [**`https://revofashion-shop.onrender.com/openapi.json`**](https://revofashion-shop.onrender.com/openapi.json)
 > - 🩺 **Health Check Endpoint**: [**`https://revofashion-shop.onrender.com/health`**](https://revofashion-shop.onrender.com/health)
 > - 🗄️ **Managed Cloud Database**: **Supabase PostgreSQL**
+> - 📦 **Object & CDN Storage**: **Supabase Storage** (Product Image CDN)
 > - 🐳 **Containerization**: **Docker** & **Docker Compose**
 > - ☁️ **Cloud Host**: **Render Web Service** with Gunicorn WSGI
 
 ## Executive Overview
 
-**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, **PostgreSQL (Supabase Cloud & Local)**, and containerized with **Docker**, deployed in production on **Render**.
+**RevoFashion** is a fashion-focused e-commerce RESTful backend API inspired by **Uniqlo**, built using **Flask**, **SQLAlchemy ORM**, **Flask-Smorest (OpenAPI 3.0 / Swagger)**, **PostgreSQL & Object Storage (Supabase Cloud & Local)**, and containerized with **Docker**, deployed in production on **Render**.
 
-It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC) with simplified roles (`superadmin`, `admin`, `customer`).
+It handles user registration & authentication, clothing product catalog management with fashion attributes (`size`, `color`, `material`, `gender`, `sku`), decoupled image gallery with automated upload to **Supabase Storage CDN**, category organization, search & filtering, order placement with variant tracking, stock auto-management, and order lifecycle state enforcement via Role-Based Access Control (RBAC) with simplified roles (`superadmin`, `admin`, `customer`).
+
 
 > 📷 **Checkpoint 3 Postman Verification**: For complete visual proof of all Postman requests (GET, POST, PUT, PATCH, DELETE) for Products, Categories, Orders, and database views, see [**CHECKPOINT3_SCREENSHOTS.md**](./CHECKPOINT3_SCREENSHOTS.md).
 
@@ -130,6 +133,11 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/revoshop_db
 # OR For Cloud Supabase PostgreSQL:
 # DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT_REF.supabase.co:5432/postgres
 
+# Supabase Storage (Product Images CDN)
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_KEY=YOUR_SUPABASE_SERVICE_ROLE_OR_ANON_KEY
+SUPABASE_BUCKET=products
+
 # Locust Load Testing Configuration
 LOCUST_HOST=http://127.0.0.1:5000
 LOCUST_USER_USERNAME=alice_smith
@@ -139,8 +147,11 @@ LOCUST_USER_PASSWORD=alice_password
 > 💡 **Notes**:
 >
 > - `DATABASE_URL`: Automatically handles `postgres://` or `postgresql://` URIs (e.g. from Render or Supabase).
+> - `SUPABASE_URL` & `SUPABASE_KEY`: Enables automated uploading of Base64 product images directly to **Supabase Storage** bucket.
+> - `SUPABASE_BUCKET`: The storage bucket name in Supabase (default: `products`, ensure public toggle is ON).
 > - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed frontend domains (e.g. `http://localhost:3000,http://localhost:5173` or `*` for development).
 > - `LOCUST_HOST`: The base URL targeting the backend API during load tests (defaults to `http://127.0.0.1:5000` or `https://revofashion-shop.onrender.com`).
+
 
 ---
 
@@ -212,7 +223,7 @@ Open your browser to test endpoints interactively across environments:
 
 #### Step 8: Run Automated Test Suite & Coverage (Pytest)
 
-The project includes a comprehensive, modular `pytest` test suite (190 test cases, **100% code coverage**) configured with in-memory SQLite (`sqlite:///:memory:`) for fast, isolated, and repeatable test runs without altering the local PostgreSQL database.
+The project includes a comprehensive, modular `pytest` test suite (209 test cases, **100% code coverage**) configured with in-memory SQLite (`sqlite:///:memory:`) for fast, isolated, and repeatable test runs without altering the local PostgreSQL database.
 
 ```bash
 # Run all tests with terminal coverage summary
@@ -225,6 +236,7 @@ pytest -v
 pytest tests/models/                 # Unit tests for SQLAlchemy models
 pytest tests/schemas/                # Marshmallow schema & validator tests
 pytest tests/routes/                 # Endpoint integration tests (GET, POST, PUT, PATCH, DELETE)
+pytest tests/test_storage.py -v       # Unit tests for Supabase Storage Base64 decode & upload
 pytest tests/test_domain_validators.py -v # Unit tests for reusable business logic validators
 pytest tests/test_demo_summary.py -v # Pytest features demo (match, raises, xfail)
 pytest tests/test_database_error_handling.py -v # Database exception & rollback verification
@@ -284,15 +296,13 @@ JOIN order_items oi ON o.id = oi.order_id
 JOIN products p ON oi.product_id = p.id;
 ```
 
----
-
 ## Core Features
 
 - ✅ **Cloud & Container Ready**: Full **Docker** & **Docker Compose** containerization, deployed live on **Render** with **Supabase Managed PostgreSQL**.
 - ✅ **OpenAPI 3.0 / Interactive Swagger UI**: Live docs at `https://revofashion-shop.onrender.com/swagger-ui` and local `/swagger-ui` via `Flask-Smorest` and `marshmallow`.
 - ✅ **PostgreSQL Schema (6 Tables)**: Normalized relational structure (`users`, `categories`, `products`, `product_images`, `orders`, `order_items`).
 - ✅ **Fashion-Specific Attributes**: Dedicated support for clothing sizes (`XS`–`XXL`, `FREE`), colors, materials, target genders (`Men`, `Women`, `Unisex`, `Kids`), and unique SKUs.
-- ✅ **Decoupled Product Gallery**: Product image gallery table supporting up to 3 base64-encoded images per product with primary image thumbnail selection.
+- ✅ **Decoupled Product Gallery & Supabase Storage CDN**: Product image gallery table supporting up to 3 images per product with primary image thumbnail selection. Base64 uploads are automatically decoded in the backend and stored in **Supabase Storage**, saving high-speed CDN URLs in PostgreSQL.
 - ✅ **Flexible Catalog Filtering & Search**: Filter `GET /products` by `gender`, `size`, `color`, `material`, free-text `search` (name & description), and pagination (`page`, `per_page`).
 - ✅ **Historical Variant & Price Snapshotting**: `order_items` junction table snapshotting item price, size, and color at the exact moment of purchase so historical orders are immune to future catalog price changes or product updates.
 - ✅ **Stateless JWT Authentication**: Secure authentication via `Flask-JWT-Extended` with 24-hour token expiration.
@@ -316,7 +326,9 @@ JOIN products p ON oi.product_id = p.id;
 | **Flask** | 3.0.3 | Web framework & App Factory pattern |
 | **Gunicorn** | 23.0.0 | Production WSGI HTTP server (multi-worker / multi-thread) |
 | **Render** | Cloud PaaS | Production application hosting & continuous deployment |
-| **Supabase** | Cloud DB | Managed PostgreSQL cloud database |
+| **Supabase DB** | Cloud DB | Managed PostgreSQL cloud database |
+| **Supabase Storage** | Cloud Storage | Object storage & CDN for product image assets |
+| **supabase-py** | 2.31.0+ | Official Supabase Python client for bucket upload & CDN URL resolution |
 | **Docker & Compose** | 20+ | Application containerization & multi-container local stack |
 | **Flask-CORS** | 6.0.5 | Cross-Origin Resource Sharing middleware |
 | **Flask-SQLAlchemy** | 3.1.1 | Object-Relational Mapping (ORM) layer |
@@ -324,7 +336,7 @@ JOIN products p ON oi.product_id = p.id;
 | **Flask-Smorest** | 0.47.0 | OpenAPI 3.0 specification & Swagger UI generation |
 | **Flask-JWT-Extended** | 4.6.0 | Stateless JSON Web Token authentication |
 | **marshmallow** | 4.3.1 | Input validation & serialization schemas |
-| **pytest** | 9.1.1 | Automated testing framework (190 tests, 100% coverage) |
+| **pytest** | 9.1.1 | Automated testing framework (209 tests, 100% coverage) |
 | **pytest-cov** | 7.1.0 | Code coverage measurement & reporting |
 | **bandit** | 1.9.4 | AST-based security vulnerability scanner |
 | **pylint** | 4.0.7 | Code quality, complexity, and PEP 8 linter |
@@ -348,7 +360,7 @@ module-2-ingrid-fortunata/
 ├── app/
 │   ├── __init__.py           # Flask app factory; registers blueprints, logging & extensions
 │   ├── auth.py               # @roles_required() decorator for RBAC
-│   ├── config.py             # Config class (DATABASE_URL, JWT, Logging & OpenAPI settings)
+│   ├── config.py             # Config class (DATABASE_URL, Supabase Storage, JWT, Logging)
 │   ├── errors.py             # Standard error response constructors & HTTP error helpers
 │   ├── extensions.py         # Extension instances (db, migrate, api, jwt, cors)
 │   ├── models/               # SQLAlchemy ORM Models
@@ -360,7 +372,7 @@ module-2-ingrid-fortunata/
 │   ├── routes/               # Flask-Smorest API Blueprints
 │   │   ├── users.py          # /auth/login, /users
 │   │   ├── categories.py     # /categories
-│   │   ├── products.py       # /products
+│   │   ├── products.py       # /products (with automated Supabase Storage upload)
 │   │   └── orders.py         # /orders
 │   ├── schemas/              # Marshmallow Validation & Serialization Schemas
 │   │   ├── user.py           # User & Auth schemas
@@ -375,12 +387,13 @@ module-2-ingrid-fortunata/
 │   │   └── order_validators.py    # Stock locking (with_for_update), transition & cancel rules
 │   ├── utils/                # General Helpers & Utilities
 │   │   ├── __init__.py       # Utility exports
-│   │   └── pagination.py     # Centralized query pagination parameter parsing
+│   │   ├── pagination.py     # Centralized query pagination parameter parsing
+│   │   └── storage.py        # Supabase Storage helper (Base64 decode, upload, CDN URLs, deletion)
 │   └── seed_data.py          # Database seeding script (categories, products, users, orders)
 ├── logs/                     # Daily rotating application log files
 │   └── app.log               # Active consolidated application log
 ├── migrations/               # Alembic database migration history
-├── tests/                    # Modular Pytest Suite (190 tests, 100% coverage)
+├── tests/                    # Modular Pytest Suite (209 tests, 100% coverage)
 │   ├── conftest.py           # In-memory SQLite fixtures & auth header helpers
 │   ├── test_demo_summary.py  # Pytest demo (exceptions, match, xfail, summary)
 │   ├── test_domain_validators.py # Unit tests for domain validator functions & error helpers
@@ -389,6 +402,7 @@ module-2-ingrid-fortunata/
 │   ├── test_config.py        # Application configuration tests
 │   ├── test_database_error_handling.py # Database exception & rollback verification
 │   ├── test_seed_data.py     # Database seeder execution tests
+│   ├── test_storage.py       # Unit tests for Supabase Storage Base64 decode & uploads
 │   ├── models/               # Model unit tests (user, product, order)
 │   ├── schemas/              # Schema & validator tests (validation rules, errors)
 │   └── routes/               # Route integration tests (auth, users, categories, products, orders)
@@ -480,22 +494,24 @@ Stores clothing items with fashion-specific attributes and stock balances.
 
 ---
 
-#### 4. `product_images` — Product Image Gallery
+#### 4. `product_images` — Product Image Gallery & CDN Storage
 
-Stores image records attached to products.
+Stores image records attached to products (URLs or Base64).
 
-| Column         | Data Type   | Constraints                              | Description                            |
-| :------------- | :---------- | :--------------------------------------- | :------------------------------------- |
-| `id`           | `INTEGER`   | `PRIMARY KEY`, Auto-increment            | Unique image ID                        |
-| `product_id`   | `INTEGER`   | `FK → products.id (CASCADE)`, `NOT NULL` | Parent product                         |
-| `image_base64` | `TEXT`      | `NOT NULL`                               | Base64-encoded image string (~1MB max) |
-| `is_primary`   | `BOOLEAN`   | `NOT NULL`, `DEFAULT false`              | Thumbnail selection flag               |
-| `created_at`   | `TIMESTAMP` | `DEFAULT UTC`                            | Upload timestamp                       |
+| Column         | Data Type   | Constraints                              | Description                                                                 |
+| :------------- | :---------- | :--------------------------------------- | :-------------------------------------------------------------------------- |
+| `id`           | `INTEGER`   | `PRIMARY KEY`, Auto-increment            | Unique image ID                                                             |
+| `product_id`   | `INTEGER`   | `FK → products.id (CASCADE)`, `NOT NULL` | Parent product                                                              |
+| `image_base64` | `TEXT`      | `NOT NULL`                               | Public Supabase Storage CDN URL (e.g. `https://.../products/uuid.png`) or Base64 URI |
+| `is_primary`   | `BOOLEAN`   | `NOT NULL`, `DEFAULT false`              | Thumbnail selection flag                                                    |
+| `created_at`   | `TIMESTAMP` | `DEFAULT UTC`                            | Upload timestamp                                                            |
 
 - **Design Rationale (Why)**:
+  - **Supabase Storage CDN Offloading**: When clients submit Base64 images via API, the backend automatically decodes the binary data, uploads it to **Supabase Storage**, and saves only the high-speed CDN URL in this table. This prevents database storage bloat, reduces backup sizes, and accelerates query performance.
   - **Decoupled Gallery Table**: Normalizing images into a separate 1-to-many table allows products to store up to 3 images without cluttering the main `products` table.
   - **Cascade Cleanup (`CASCADE`)**: Deleting a product automatically cleans up its associated image records.
   - **Primary Image Flag (`is_primary`)**: Allows `GET /products` list view to instantly fetch thumbnail images via an optimized subquery without returning full image arrays.
+
 
 ---
 
@@ -1158,12 +1174,14 @@ Client HTTP Request
   - `delivered` ➔ Green
   - `cancelled` ➔ Red / Gray
 
-### 3. Product Base64 Image Handling
+### 3. Product Image Handling (Supabase Storage CDN & Base64)
 
-- Primary images on catalog list (`GET /products`) are returned in `primary_image`.
-- Render base64 images directly in `<img>` tags:
+- **Catalog Thumbnails**: Primary images on catalog list (`GET /products`) are returned in `primary_image` as a high-speed CDN URL or Base64 URI.
+- **Image Gallery**: Detailed view (`GET /products/<id>`) returns `images` array with `image_base64` (CDN URL or Base64 URI) and `is_primary` flags.
+- **Rendering**: In frontend HTML/React, pass the image value directly to `<img>`:
   ```html
-  <img src="data:image/jpeg;base64,..." alt="Product Image" />
+  <!-- Works seamlessly with both Supabase CDN URLs and Base64 URIs -->
+  <img src="https://YOUR_PROJECT_REF.supabase.co/storage/v1/object/public/products/products/uuid.png" alt="Product Image" />
   ```
 
 ---
@@ -1194,7 +1212,7 @@ Client HTTP Request
 
 ## Docker Containerization & Cloud Deployment Guide (Render + Supabase)
 
-RevoFashion API is production-ready and deployed live on **Render** backed by a high-availability **Supabase Managed PostgreSQL** database.
+RevoFashion API is production-ready and deployed live on **Render** backed by a high-availability **Supabase Managed PostgreSQL** database and **Supabase Storage** for product images.
 
 ### 🌐 Live Production Access
 
@@ -1207,11 +1225,11 @@ RevoFashion API is production-ready and deployed live on **Render** backed by a 
 
 ---
 
-### 🗄️ Cloud Database: Supabase PostgreSQL
+### 🗄️ Cloud Database & Storage: Supabase
 
-The production environment connects to **Supabase**, providing automated backups, SSL/TLS encryption, and connection pooling.
+The production environment connects to **Supabase**, providing managed PostgreSQL and Object Storage CDN.
 
-#### Configuring Supabase `DATABASE_URL`:
+#### 1. Configuring Supabase PostgreSQL `DATABASE_URL`:
 1. Log in to [Supabase Dashboard](https://supabase.com/dashboard) and navigate to **Project Settings → Database**.
 2. Under **Connection string**, select **URI**.
 3. Use the URI format:
@@ -1219,6 +1237,11 @@ The production environment connects to **Supabase**, providing automated backups
    DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
    ```
    *(Note: The application automatically handles `postgres://` to `postgresql://` conversion in `app/config.py`)*.
+
+#### 2. Configuring Supabase Storage Bucket:
+1. In Supabase Dashboard, click **Storage** in the sidebar.
+2. Click **New bucket**, name it `products`, and ensure **Public bucket** is toggled **ON**.
+3. Go to **Project Settings → API** and copy your **Project URL** and **Service Role Key** (or Anon Key).
 
 ---
 
@@ -1236,9 +1259,13 @@ The service is hosted on **Render** as a Python / Docker Web Service.
    | `SECRET_KEY` | `<generate-secure-secret-32-chars>` | Session signature secret |
    | `JWT_SECRET_KEY` | `<generate-secure-jwt-secret-32-chars>` | JWT signing secret |
    | `DATABASE_URL` | `postgresql://postgres:[PWD]@db.[REF].supabase.co:5432/postgres` | Supabase connection string |
+   | `SUPABASE_URL` | `https://[PROJECT-REF].supabase.co` | Supabase project API URL |
+   | `SUPABASE_KEY` | `eyJhbGciOi...` | Supabase service_role or anon key |
+   | `SUPABASE_BUCKET` | `products` | Supabase Storage bucket name |
    | `CORS_ALLOWED_ORIGINS` | `*` or `https://your-frontend.vercel.app` | Frontend whitelist |
    | `PORT` | `5000` (or Render default `10000`) | Server port binding |
 4. **Deploy**: Render automatically pulls latest commits from `main`, executes DB migrations on start, and launches Gunicorn.
+
 
 ---
 

@@ -9,6 +9,7 @@ from app.auth import roles_required, is_admin_user
 from app.errors import error_response, not_found_response
 from app.validators import validate_product_category, validate_product_deletion
 from app.utils.pagination import get_page_params
+from app.utils.storage import upload_base64_to_supabase
 from app.schemas import (
     ProductListResponseSchema,
     ProductCreateInputSchema,
@@ -22,7 +23,7 @@ products_bp = Blueprint('products', __name__, description='Operations on product
 
 
 def save_product_images(product_id: int, images_data: list, replace: bool = False):
-    """Saves or replaces images for a product, ensuring exactly one primary image."""
+    """Saves or replaces images for a product, uploading base64 binaries to Supabase Storage and ensuring exactly one primary image."""
     if replace:
         ProductImage.query.filter_by(product_id=product_id).delete()
 
@@ -33,9 +34,12 @@ def save_product_images(product_id: int, images_data: list, replace: bool = Fals
         images_data[0]['is_primary'] = True
 
     for img_obj in images_data:
+        raw_image_data = img_obj['image_base64']
+        image_url = upload_base64_to_supabase(raw_image_data, folder="products")
+
         new_img = ProductImage(
             product_id=product_id,
-            image_base64=img_obj['image_base64'],
+            image_base64=image_url,
             is_primary=img_obj.get('is_primary', False)
         )
         db.session.add(new_img)
