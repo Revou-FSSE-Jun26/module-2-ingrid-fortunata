@@ -36,6 +36,11 @@ class Config:
         'pool_pre_ping': True     # Liveness health check before using pooled connection
     }
 
+    # Supabase Storage configuration
+    SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://shgafjqeprksdawepfcl.supabase.co')
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')
+    SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'products')
+
     # OpenAPI/Swagger UI configuration
     API_TITLE = "RevoFashion API"
     API_VERSION = "v1"
